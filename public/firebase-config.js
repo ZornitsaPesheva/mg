@@ -1,6 +1,6 @@
 // Firebase web configuration is public by design. Access is protected by Authentication and Firestore Security Rules.
 // Copy the values from Firebase Console > Project settings > Your apps.
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyBdVaLQN94pUS5sEzwEds4GHGBChOhQmlw",
   authDomain: "mg4-urban-order-tracker.firebaseapp.com",
   projectId: "mg4-urban-order-tracker",
