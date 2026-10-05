@@ -561,9 +561,9 @@ function connectFirebase() {
       currentUser = user;
       els["login-button"].classList.toggle("hidden", user?.uid === ADMIN_UID);
       els["logout-button"].classList.toggle("hidden", user?.uid !== ADMIN_UID);
-      if (user && user.uid !== ADMIN_UID) {
+      if (user && user.uid !== "Bsrl0QKJl8OGpJBDJzrN4jIC3ay2") {
         showNotice("Влезли сте с акаунт без администраторски права. Данните остават само за четене.", "warning");
-      } else if (user?.uid === ADMIN_UID) {
+      } else if (user?.uid === "Bsrl0QKJl8OGpJBDJzrN4jIC3ay2") {
         showNotice("Влезли сте като администратор.", "success", 4000);
       }
       render();
