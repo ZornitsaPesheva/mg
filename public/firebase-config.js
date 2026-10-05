@@ -10,7 +10,7 @@ export const firebaseConfig = {
 };
 
 // Replace this with the UID of the administrator created in Firebase Authentication.
-export const ADMIN_UID = "REPLACE_WITH_ADMIN_UID";
+export const ADMIN_UID = "Bsrl0QKJl8OGpJBDJzrN4jIC3ay2";
 
 // All visitors share a common default timeline start. It can be changed in this file or per browser in the UI.
 export const TIMELINE_DEFAULT_START = "2026-02-01";
