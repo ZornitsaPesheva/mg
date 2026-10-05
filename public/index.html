@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="bg">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f5f7f8">
+    <meta name="description" content="Публичен тракер за поръчки и доставки на MG4 EV Urban в България.">
+    <title>MG4 Urban — тракер на поръчки и доставки</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./styles.css?v=1">
+    <script type="module" src="./app.js?v=1"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#top" aria-label="MG4 Urban — начало">
+          <span class="brand-mark" aria-hidden="true">MG</span>
+          <span class="brand-copy"><strong>URBAN / TRACKER</strong><span>Общностен тракер за България</span></span>
+        </a>
+        <div class="topbar-actions">
+          <span id="connection-pill" class="connection-pill" role="status"><span class="connection-dot"></span><span id="connection-text">Свързване…</span></span>
+          <button id="login-button" class="button button-quiet" type="button">Администраторски вход</button>
+          <button id="logout-button" class="button button-quiet hidden" type="button">Изход</button>
+        </div>
+      </header>
+
+      <main id="top">
+        <section class="hero" aria-labelledby="page-title">
+          <div class="hero-copy">
+            <p class="eyebrow"><span class="eyebrow-line"></span> MG4 EV URBAN · БЪЛГАРИЯ</p>
+            <h1 id="page-title">От поръчката<br><span>до ключовете.</span></h1>
+            <p class="hero-description">Споделен поглед към времето за доставка на MG4 EV Urban. Данните се обновяват автоматично.</p>
+          </div>
+          <div class="hero-stat" aria-label="Обобщение">
+            <span class="stat-caption">Актуално към</span>
+            <strong id="today-label">—</strong>
+            <span class="stat-foot"><span class="live-dot"></span> Europe / Sofia</span>
+          </div>
+          <div class="hero-art" aria-hidden="true"><span class="art-ring art-ring-one"></span><span class="art-ring art-ring-two"></span><span class="art-spark">✳</span></div>
+        </section>
+
+        <section class="dashboard" aria-label="Тракер на поръчки">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow eyebrow-muted">ТАБЛО НА ДОСТАВКИТЕ</p>
+              <h2>Поръчки и доставки</h2>
+            </div>
+            <div class="section-meta"><span id="visible-count" class="count-number">0</span><span id="count-label">автомобила</span></div>
+          </div>
+
+          <div class="toolbar">
+            <div class="filters" aria-label="Филтри">
+              <label class="filter-control"><span>Оборудване</span><select id="model-filter"><option value="all">Всички</option><option value="Basic">Basic</option><option value="Comfort">Comfort</option><option value="Premium">Premium</option><option value="none">Не е посочено</option></select></label>
+              <label class="filter-control"><span>Цвят</span><select id="color-filter"><option value="all">Всички цветове</option></select></label>
+              <button id="clear-filters" class="text-button" type="button">Изчисти филтрите</button>
+            </div>
+            <div id="admin-actions" class="admin-actions hidden">
+              <button id="seed-button" class="button button-outline hidden" type="button">Импортирай началните данни</button>
+              <button id="add-car-button" class="button button-primary" type="button"><span aria-hidden="true">＋</span> Добави кола</button>
+            </div>
+          </div>
+
+          <div id="notice" class="notice hidden" role="status" aria-live="polite"></div>
+          <div id="empty-state" class="empty-state hidden">
+            <span class="empty-icon" aria-hidden="true">↗</span>
+            <h3 id="empty-title">Все още няма записи</h3>
+            <p id="empty-description">Когато бъдат добавени поръчки, ще се появят тук.</p>
+          </div>
+
+          <div id="timeline-wrap" class="timeline-wrap" aria-label="Хоризонтален времеви график">
+            <div id="timeline" class="timeline"></div>
+          </div>
+          <div id="selected-detail" class="selected-detail" aria-live="polite"><span class="detail-icon" aria-hidden="true">i</span><span>Изберете лента, за да видите подробности за поръчката.</span></div>
+
+          <div class="timeline-options">
+            <label class="axis-control" for="axis-start">Начало на времевата ос <input id="axis-start" type="date" value="2026-02-01"></label>
+            <span class="axis-note">Еднакъв мащаб за всички записи · филтрите не променят периода</span>
+          </div>
+        </section>
+
+        <section class="legend" aria-label="Легенда">
+          <div class="legend-item"><span class="legend-swatch legend-delivered"></span><span>Доставена</span></div>
+          <div class="legend-item"><span class="legend-swatch legend-waiting"></span><span>Очаква доставка</span></div>
+          <div class="legend-item"><span class="legend-approx"></span><span>Приблизителна дата</span></div>
+          <p class="legend-note">Лентите започват от датата на поръчката. Лява стрелка означава, че поръчката е преди началото на оста.</p>
+        </section>
+
+        <aside class="privacy-note">
+          <span class="privacy-icon" aria-hidden="true">◎</span>
+          <p><strong>Бележка за поверителност</strong><br>Тракерът е публичен. Използвайте псевдоними и публикувайте лични данни само със съгласието на засегнатите лица. Данните се четат публично; редактирането е ограничено чрез Firebase Authentication и Firestore Security Rules.</p>
+        </aside>
+      </main>
+
+      <footer class="footer"><span>MG4 Urban Order Tracker</span><span>Създаден за общността · <span id="footer-year">2026</span></span></footer>
+    </div>
+
+    <dialog id="login-dialog" class="modal">
+      <form id="login-form" class="modal-card">
+        <button class="modal-close" type="button" data-close="login-dialog" aria-label="Затвори">×</button>
+        <p class="eyebrow eyebrow-muted">АДМИНИСТРАЦИЯ</p><h2>Вход за администратор</h2>
+        <p class="modal-intro">Входът е само за предварително създадени Firebase акаунти.</p>
+        <label class="form-field"><span>Имейл</span><input name="email" type="email" autocomplete="username" required></label>
+        <label class="form-field"><span>Парола</span><input name="password" type="password" autocomplete="current-password" required></label>
+        <p id="login-error" class="form-error" role="alert"></p>
+        <button class="button button-primary button-wide" type="submit">Вход</button>
+      </form>
+    </dialog>
+
+    <dialog id="car-dialog" class="modal">
+      <form id="car-form" class="modal-card">
+        <button class="modal-close" type="button" data-close="car-dialog" aria-label="Затвори">×</button>
+        <p class="eyebrow eyebrow-muted">УПРАВЛЕНИЕ НА ЗАПИСИТЕ</p><h2 id="car-form-title">Добави кола</h2>
+        <input name="id" type="hidden">
+        <label class="form-field"><span>Име или псевдоним</span><input name="name" type="text" maxlength="80" autocomplete="off" required></label>
+        <div class="form-grid">
+          <label class="form-field"><span>Оборудване</span><select name="model"><option value="">Не е посочено</option><option value="Basic">Basic</option><option value="Comfort">Comfort</option><option value="Premium">Premium</option></select></label>
+          <label class="form-field"><span>Цвят</span><select name="color" id="car-color-select"><option value="">Не е посочено</option></select></label>
+        </div>
+        <label class="form-field"><span>Дата на поръчката</span><input name="orderDate" type="date"><small id="order-date-help">Задължителна за нов запис.</small></label>
+        <div id="approximate-preserve" class="approximate-preserve hidden"></div>
+        <label class="form-field"><span>Дата на доставка <em>незадължително</em></span><input name="deliveryDate" type="date"><small>Може да бъде добавена или изчистена по-късно.</small></label>
+        <p id="car-form-error" class="form-error" role="alert"></p>
+        <div class="modal-actions"><button class="button button-outline" type="button" data-close="car-dialog">Отказ</button><button class="button button-primary" type="submit">Запази</button></div>
+      </form>
+    </dialog>
+  </body>
+</html>
