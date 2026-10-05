@@ -604,7 +604,7 @@ function installEvents() {
     const form = new FormData(els["login-form"]);
     try {
       const credential = await signInWithEmailAndPassword(auth, String(form.get("email")).trim(), String(form.get("password")));
-      if (credential.user.uid !== ADMIN_UID) {
+      if (credential.user.uid !== "Bsrl0QKJl8OGpJBDJzrN4jIC3ay2") {
         await signOut(auth);
         throw new Error("Този акаунт не е в предварително зададения администраторски списък.");
       }
