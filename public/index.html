@@ -9,8 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="./styles.css?v=1">
-    <script type="module" src="./app.js?v=1"></script>
+    <link rel="stylesheet" href="./styles.css?v=2">
+    <script type="module" src="./app.js?v=2"></script>
   </head>
   <body>
     <div class="app-shell">
@@ -76,6 +76,11 @@
 
           <div class="timeline-options">
             <label class="axis-control" for="axis-start">Начало на времевата ос <input id="axis-start" type="date" value="2026-02-01"></label>
+            <div class="timeline-scale-controls" aria-label="Мащаб на времевата ос">
+              <button id="zoom-out" class="scale-button" type="button" aria-label="Намали мащаба" title="Намали мащаба">−</button>
+              <button id="zoom-in" class="scale-button" type="button" aria-label="Увеличи мащаба" title="Увеличи мащаба">+</button>
+              <button id="fit-period" class="fit-button is-active" type="button" aria-pressed="true">Целият период</button>
+            </div>
             <span class="axis-note">Еднакъв мащаб за всички записи · филтрите не променят периода</span>
           </div>
         </section>

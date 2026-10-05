@@ -29,14 +29,13 @@ const COLORS = [
 ];
 const MODELS = new Set(["Basic", "Comfort", "Premium"]);
 const TRACKER_REF_PATH = ["tracker", "data"];
-const DAY_WIDTH = 14;
 const axisStorageKey = "mg4-urban-timeline-start";
 const els = Object.fromEntries([
   "connection-pill", "connection-text", "login-button", "logout-button", "admin-actions", "seed-button", "add-car-button",
   "today-label", "visible-count", "count-label", "model-filter", "color-filter", "clear-filters", "notice", "empty-state",
   "empty-title", "empty-description", "timeline-wrap", "timeline", "selected-detail", "axis-start", "footer-year",
   "login-dialog", "login-form", "login-error", "car-dialog", "car-form", "car-form-title", "car-color-select",
-  "order-date-help", "approximate-preserve", "car-form-error",
+  "order-date-help", "approximate-preserve", "car-form-error", "zoom-out", "zoom-in", "fit-period",
 ].map((id) => [id, document.getElementById(id)]));
 
 let db = null;
@@ -48,6 +47,9 @@ let readFailed = false;
 let today = getSofiaDate();
 let axisStart = loadAxisStart();
 let unsubscribeCars = null;
+let timelinePlotWidth = 0;
+let timelineZoom = 1;
+let fitFullPeriod = true;
 
 function configuredFirebase() {
   const required = ["apiKey", "authDomain", "projectId", "messagingSenderId", "appId"];
@@ -178,35 +180,66 @@ function showSelectedDetail(car) {
   els["selected-detail"].append(makeElement("span", "detail-icon", "i"), makeElement("span", "", rowDetailText(car)));
 }
 
-function renderTimelineAxis(start, end, timelineDays, timelineWidth) {
-  const header = makeElement("div", "timeline-header");
-  header.append(makeElement("div", "header-label", "АВТОМОБИЛ"));
-  const axis = makeElement("div", "axis");
-  axis.style.width = `${timelineWidth}px`;
-  axis.style.setProperty("--day-width", `${DAY_WIDTH}px`);
-  axis.style.setProperty("--week-width", `${DAY_WIDTH * 7}px`);
-
+function monthMarkers(start, end, timelineWidth) {
   const startDate = new Date(`${start}T00:00:00Z`);
-  const endMonth = new Date(`${end}T00:00:00Z`);
+  const endDate = new Date(`${end}T00:00:00Z`);
+  const totalDays = Math.max(1, daysBetween(start, end) ?? 1);
+  const markers = [];
   const monthCursor = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), 1));
-  if (monthCursor < startDate) monthCursor.setUTCMonth(monthCursor.getUTCMonth() + 1);
-  while (monthCursor <= endMonth) {
+  while (monthCursor <= endDate) {
     const dateKey = monthCursor.toISOString().slice(0, 10);
-    const offset = daysBetween(start, dateKey);
-    const label = makeElement("span", "month-label", monthName(monthCursor.getUTCFullYear(), monthCursor.getUTCMonth() + 1));
-    label.style.left = `${Math.max(0, offset) * DAY_WIDTH + 7}px`;
-    axis.append(label);
+    const elapsed = Math.max(0, daysBetween(start, dateKey) ?? 0);
+    markers.push({
+      left: (elapsed / totalDays) * timelineWidth,
+      label: monthName(monthCursor.getUTCFullYear(), monthCursor.getUTCMonth() + 1),
+    });
     monthCursor.setUTCMonth(monthCursor.getUTCMonth() + 1);
   }
-  const todayOffset = Math.max(0, timelineDays - 1);
+  return markers;
+}
+
+function appendMonthTicks(container, markers, className) {
+  for (const marker of markers) {
+    const tick = makeElement("span", className);
+    tick.style.left = `${marker.left}px`;
+    container.append(tick);
+  }
+}
+
+function renderTimelineAxis(end, timelineWidth, markers) {
+  const header = makeElement("div", "timeline-header");
+  header.append(makeElement("div", "header-label", "АВТОМОБИЛ"));
+  const scroll = makeElement("div", "timeline-scroll axis-scroll");
+  scroll.addEventListener("scroll", () => syncTimelineScroll(scroll));
+  const axis = makeElement("div", "axis");
+  axis.style.width = `${timelineWidth}px`;
+  const labelStride = Math.max(1, Math.ceil(markers.length / Math.max(1, Math.floor(timelineWidth / 82))));
+  for (const [index, marker] of markers.entries()) {
+    if (index % labelStride !== 0) continue;
+    const label = makeElement("span", "month-label", marker.label);
+    label.style.left = `${marker.left}px`;
+    if (index === 0) label.classList.add("at-start");
+    if (marker.left > timelineWidth - 72) label.classList.add("at-end");
+    axis.append(label);
+  }
+  appendMonthTicks(axis, markers, "month-tick");
   const todayMarker = makeElement("span", "axis-today", `ДНЕС · ${formatISODate(end)}`);
-  todayMarker.style.left = `${Math.max(0, timelineWidth - Math.min(150, timelineWidth))}px`;
+  todayMarker.style.left = `${Math.max(0, timelineWidth - 150)}px`;
   axis.append(todayMarker);
-  header.append(axis);
+  scroll.append(axis);
+  header.append(scroll);
   return header;
 }
 
-function appendCarRow(car, start, timelineDays, timelineWidth) {
+function syncTimelineScroll(source) {
+  for (const scroll of els.timeline.querySelectorAll(".timeline-scroll")) {
+    if (scroll !== source && Math.abs(scroll.scrollLeft - source.scrollLeft) > 1) {
+      scroll.scrollLeft = source.scrollLeft;
+    }
+  }
+}
+
+function appendCarRow(car, start, end, timelineWidth, markers) {
   const row = makeElement("div", "timeline-row");
   const label = makeElement("div", "car-label");
   const initials = car.name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("");
@@ -242,27 +275,27 @@ function appendCarRow(car, start, timelineDays, timelineWidth) {
     label.append(actions);
   }
 
+  const chartScroll = makeElement("div", "timeline-scroll chart-scroll");
+  chartScroll.addEventListener("scroll", () => syncTimelineScroll(chartScroll));
   const chart = makeElement("div", "chart-cell");
   chart.style.width = `${timelineWidth}px`;
-  chart.style.setProperty("--day-width", `${DAY_WIDTH}px`);
-  chart.style.setProperty("--week-width", `${DAY_WIDTH * 7}px`);
+  appendMonthTicks(chart, markers, "month-tick chart-month-tick");
   const orderStart = car.orderDate || car.orderDateRangeStart;
-  const orderEnd = car.deliveryDate || today;
+  const orderEnd = car.deliveryDate || end;
   const track = makeElement("div", "bar-track");
   track.style.width = `${timelineWidth}px`;
+  const totalDays = Math.max(1, daysBetween(start, end) ?? 1);
   const rawStartOffset = orderStart ? daysBetween(start, orderStart) : 0;
-  const rawEndOffset = orderEnd ? daysBetween(start, orderEnd) : timelineDays - 1;
-  const leftDay = Math.max(0, rawStartOffset ?? 0);
-  const rightDay = Math.min(timelineDays - 1, Math.max(leftDay, rawEndOffset ?? timelineDays - 1));
-  const left = Math.min(timelineWidth, leftDay * DAY_WIDTH);
+  const rawEndOffset = orderEnd ? daysBetween(start, orderEnd) : totalDays;
+  const left = Math.max(0, Math.min(Math.max(0, timelineWidth - 3), ((rawStartOffset ?? 0) / totalDays) * timelineWidth));
+  const right = Math.max(left, Math.min(timelineWidth, ((rawEndOffset ?? totalDays) / totalDays) * timelineWidth));
   const spanDays = Math.max(0, (daysBetween(orderStart, orderEnd) ?? 0));
-  const clippedWidth = Math.max(0, (rightDay - leftDay) * DAY_WIDTH);
-  const visibleWidth = rawStartOffset < 0 ? Math.max(0, rightDay * DAY_WIDTH) : clippedWidth;
+  const visibleWidth = Math.max(0, right - left);
   const isSameDay = Boolean(car.deliveryDate && spanDays === 0);
   const bar = makeElement("button", `bar ${car.deliveryDate ? "delivered" : "waiting"}${car.orderDateApproximate ? " approximate" : ""}${rawStartOffset < 0 ? " pre-start" : ""}${isSameDay ? " same-day" : ""}`);
   bar.type = "button";
   bar.style.left = `${left}px`;
-  bar.style.width = `${isSameDay ? 3 : Math.max(visibleWidth, orderStart === today ? 3 : 0)}px`;
+  bar.style.width = `${Math.max(visibleWidth, 3)}px`;
   const details = rowDetailText(car);
   bar.setAttribute("aria-label", details);
   bar.setAttribute("aria-describedby", `tooltip-${car.id}`);
@@ -270,23 +303,39 @@ function appendCarRow(car, start, timelineDays, timelineWidth) {
   bar.addEventListener("focus", () => showSelectedDetail(car));
   bar.addEventListener("mouseenter", () => showSelectedDetail(car));
   if (car.orderDateApproximate && car.orderDateRangeStart && car.orderDateRangeEnd) {
-    const approximateWidthRaw = (daysBetween(car.orderDateRangeStart, car.orderDateRangeEnd) + 1) * DAY_WIDTH;
-    const approximateOffset = daysBetween(start, car.orderDateRangeStart);
-    const visibleApproxStart = Math.max(0, approximateOffset) * DAY_WIDTH;
-    const visibleApproxEnd = Math.min(timelineWidth, (Math.max(0, approximateOffset) + approximateWidthRaw / DAY_WIDTH) * DAY_WIDTH);
-    const visibleApproximate = Math.max(0, visibleApproxEnd - Math.max(left, visibleApproxStart));
+    const rangeStart = Math.max(0, Math.min(timelineWidth, ((daysBetween(start, car.orderDateRangeStart) ?? 0) / totalDays) * timelineWidth));
+    const rangeEnd = Math.max(rangeStart, Math.min(timelineWidth, ((daysBetween(start, car.orderDateRangeEnd) ?? 0) / totalDays) * timelineWidth));
+    const visibleApproximate = Math.max(0, rangeEnd - rangeStart);
     bar.style.setProperty("--uncertain-width", `${visibleApproximate}px`);
   }
   const tooltip = makeElement("span", "bar-tooltip", details);
   tooltip.id = `tooltip-${car.id}`;
   tooltip.setAttribute("role", "tooltip");
-  const durationText = car.deliveryDate ? `Доставена за ${formatDuration(car, car.deliveryDate)}` : `Чака ${formatDuration(car, today)}`;
+  const durationText = car.deliveryDate ? `Доставена за ${formatDuration(car, car.deliveryDate)}` : `Чака ${formatDuration(car, end)}`;
   const caption = makeElement("span", `bar-caption${car.deliveryDate ? " is-delivered" : ""}`, `${durationText}${car.orderDateApproximate ? " · приблизително" : ""}`);
   caption.style.left = `${left + Math.max(isSameDay ? 3 : visibleWidth, 0) + 9}px`;
   track.append(bar, tooltip, caption);
   chart.append(track);
-  row.append(label, chart);
+  chartScroll.append(chart);
+  const summary = makeElement("div", "car-summary", `Поръчка: ${displayedDate(car)} · ${car.deliveryDate ? `Доставка: ${formatISODate(car.deliveryDate)} · Доставена за ${formatDuration(car, car.deliveryDate)}` : `Чака ${formatDuration(car, end)}`}`);
+  row.append(label, chartScroll, summary);
   return row;
+}
+
+function timelineLabelWidth() {
+  if (window.matchMedia("(max-width: 620px)").matches) return 0;
+  return window.matchMedia("(max-width: 900px)").matches ? 228 : 290;
+}
+
+function measureTimelinePlotWidth() {
+  const mobileInset = window.matchMedia("(max-width: 620px)").matches ? 20 : 0;
+  return Math.max(1, els.timeline.clientWidth - timelineLabelWidth() - mobileInset);
+}
+
+function updateScaleControls() {
+  els["fit-period"].classList.toggle("is-active", fitFullPeriod);
+  els["fit-period"].setAttribute("aria-pressed", String(fitFullPeriod));
+  els["zoom-out"].disabled = fitFullPeriod || timelineZoom <= 1;
 }
 
 function render() {
@@ -312,14 +361,27 @@ function render() {
   }
   const end = today;
   if (!isValidISODate(axisStart) || axisStart > end) axisStart = TIMELINE_DEFAULT_START;
-  const timelineDays = Math.max(1, (daysBetween(axisStart, end) ?? 0) + 1);
-  const timelineWidth = timelineDays * DAY_WIDTH;
-  els.timeline.style.setProperty("--label-width", window.matchMedia("(max-width: 620px)").matches ? "228px" : "290px");
-  els.timeline.style.setProperty("--timeline-width", `${timelineWidth}px`);
-  els.timeline.replaceChildren(renderTimelineAxis(axisStart, end, timelineDays, timelineWidth));
+  timelinePlotWidth = measureTimelinePlotWidth();
+  const timelineWidth = timelinePlotWidth * (fitFullPeriod ? 1 : timelineZoom);
+  const markers = monthMarkers(axisStart, end, timelineWidth);
+  els.timeline.style.setProperty("--label-width", `${timelineLabelWidth()}px`);
+  els.timeline.classList.toggle("is-zoomed", !fitFullPeriod && timelineZoom > 1);
+  els.timeline.replaceChildren(renderTimelineAxis(end, timelineWidth, markers));
   const fragment = document.createDocumentFragment();
-  for (const car of visible) fragment.append(appendCarRow(car, axisStart, timelineDays, timelineWidth));
+  for (const car of visible) fragment.append(appendCarRow(car, axisStart, end, timelineWidth, markers));
   els.timeline.append(fragment);
+  updateScaleControls();
+}
+
+function initTimelineResizeObserver() {
+  const observer = new ResizeObserver(() => {
+    const nextWidth = measureTimelinePlotWidth();
+    if (Math.abs(nextWidth - timelinePlotWidth) > 1) {
+      timelinePlotWidth = nextWidth;
+      render();
+    }
+  });
+  observer.observe(els["timeline-wrap"]);
 }
 
 function updateToday() {
@@ -345,6 +407,21 @@ function initTimelineControls() {
     }
     axisStart = value;
     try { localStorage.setItem(axisStorageKey, axisStart); } catch { /* local storage may be disabled */ }
+    render();
+  });
+  els["fit-period"].addEventListener("click", () => {
+    fitFullPeriod = true;
+    timelineZoom = 1;
+    render();
+  });
+  els["zoom-in"].addEventListener("click", () => {
+    fitFullPeriod = false;
+    timelineZoom = Math.min(4, timelineZoom * 1.25);
+    render();
+  });
+  els["zoom-out"].addEventListener("click", () => {
+    timelineZoom = Math.max(1, timelineZoom / 1.25);
+    fitFullPeriod = timelineZoom === 1;
     render();
   });
   window.setInterval(updateToday, 60_000);
@@ -625,6 +702,7 @@ function installEvents() {
 
 populateColorOptions();
 initTimelineControls();
+initTimelineResizeObserver();
 installEvents();
 render();
 connectFirebase();
