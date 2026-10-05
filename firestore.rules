@@ -9,7 +9,7 @@ service cloud.firestore {
 
       // Replace the UID below with the administrator's Firebase Auth UID.
       allow create, update: if request.auth != null
-        && request.auth.uid == 'REPLACE_WITH_ADMIN_UID'
+        && request.auth.uid == 'Bsrl0QKJl8OGpJBDJzrN4jIC3ay2'
         && request.resource.data.keys().hasAll(['cars'])
         && request.resource.data.keys().hasOnly(['cars'])
         && request.resource.data.cars is list;

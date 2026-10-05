@@ -1,12 +1,12 @@
 // Firebase web configuration is public by design. Access is protected by Authentication and Firestore Security Rules.
 // Copy the values from Firebase Console > Project settings > Your apps.
-export const firebaseConfig = {
-  apiKey: "PASTE_FIREBASE_WEB_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
-  messagingSenderId: "PASTE_MESSAGING_SENDER_ID",
-  appId: "PASTE_FIREBASE_APP_ID",
+const firebaseConfig = {
+  apiKey: "AIzaSyBdVaLQN94pUS5sEzwEds4GHGBChOhQmlw",
+  authDomain: "mg4-urban-order-tracker.firebaseapp.com",
+  projectId: "mg4-urban-order-tracker",
+  storageBucket: "mg4-urban-order-tracker.firebasestorage.app",
+  messagingSenderId: "1081308535598",
+  appId: "1:1081308535598:web:02b5c29f43df7d317378bf"
 };
 
 // Replace this with the UID of the administrator created in Firebase Authentication.
