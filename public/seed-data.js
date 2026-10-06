@@ -20,7 +20,6 @@ export const seedCars = [
   { id: "lora-cholakova", name: "Лора Чолакова", model: null, color: "dover-white", orderDate: "2026-09-01", deliveryDate: null, note: "Срок по договор 5 месеца; устно обещана доставка през декември" },
   { id: "plamen-enchev", name: "Пламен Енчев", model: "Premium", color: "cosmic-silver", orderDate: "2026-06-20", deliveryDate: null },
   { id: "vasil-monev", name: "Васил Монев", model: "Comfort", color: "white", orderDate: "2026-05-22", deliveryDate: null, note: "Long Range" },
-  { id: "zhenya-staikova", name: "Женя Стайкова", model: "Comfort", color: "white", orderDate: "2026-05-22", deliveryDate: null, note: "Long Range" },
   {
   id: "zhenya-staikova",
   name: "Женя Стайкова",
