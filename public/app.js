@@ -12,9 +12,10 @@ import {
   doc,
   onSnapshot,
   runTransaction,
+  getDoc,
 } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 import { firebaseConfig, ADMIN_UID, TIMELINE_DEFAULT_START } from "./firebase-config.js";
-import { seedCars } from "./seed-data.js";
+import { seedCars, seedUpdates } from "./seed-data.js";
 import { daysBetween, formatISODate, getSofiaDate, isValidISODate, monthName } from "./date-utils.js";
 
 const COLORS = [
@@ -25,13 +26,19 @@ const COLORS = [
   { id: "andes-grey", name: "Andes Grey", hex: "#777B7D" },
   { id: "diamond-red", name: "Diamond Red", hex: "#B52D3C" },
   { id: "stone-green", name: "Stone Green", hex: "#758477" },
+  { id: "camden-grey", name: "Camden Grey", hex: "#6B6F72" },
+  { id: "cosmic-silver", name: "Cosmic Silver", hex: "#A7ABAF" },
   { id: "red", name: "Червен — неуточнен нюанс", hex: "#B52D3C" },
+  { id: "white", name: "Бял — неуточнен нюанс", hex: "#ECEDEE" },
+  { id: "black", name: "Черен — неуточнен нюанс", hex: "#252729" },
 ];
 const MODELS = new Set(["Basic", "Comfort", "Premium"]);
+const STATUSES = new Set(["waiting", "delivered", "switched"]);
+const STATUS_LABELS = { waiting: "Очаква доставка", delivered: "Доставена", switched: "Преминава към друг модел" };
 const TRACKER_REF_PATH = ["tracker", "data"];
 const axisStorageKey = "mg4-urban-timeline-start";
 const els = Object.fromEntries([
-  "connection-pill", "connection-text", "login-button", "logout-button", "admin-actions", "seed-button", "add-car-button",
+  "connection-pill", "connection-text", "login-button", "logout-button", "admin-actions", "seed-button", "add-car-button", "import-dialog", "import-form", "import-preview", "import-error", "import-confirm",
   "today-label", "visible-count", "count-label", "model-filter", "color-filter", "clear-filters", "notice", "empty-state",
   "empty-title", "empty-description", "timeline-wrap", "timeline", "selected-detail", "axis-start", "footer-year",
   "login-dialog", "login-form", "login-error", "car-dialog", "car-form", "car-form-title", "car-color-select",
@@ -120,7 +127,41 @@ function orderSortDate(car) {
   return car.orderDate || car.orderDateRangeStart || "9999-12-31";
 }
 
+// Без изричен статус той се извежда от deliveryDate, така старите записи работят без миграция.
+function carStatus(car) {
+  if (STATUSES.has(car.status)) return car.status;
+  return car.deliveryDate ? "delivered" : "waiting";
+}
+
+function hasApproximateDelivery(car) {
+  return !car.deliveryDate && car.deliveryDateApproximate === true && Boolean(car.deliveryDateRangeStart && car.deliveryDateRangeEnd);
+}
+
+function displayedDelivery(car) {
+  if (car.deliveryDate) return formatISODate(car.deliveryDate);
+  if (car.deliveryDateApproximate) return car.deliveryDateNote || "Приблизителна дата";
+  return carStatus(car) === "switched" ? "Не е доставена" : "Очаква доставка";
+}
+
+function durationText(car, end) {
+  const status = carStatus(car);
+  if (status === "switched") return STATUS_LABELS.switched;
+  if (status === "delivered") {
+    if (car.deliveryDate || hasApproximateDelivery(car)) return `Доставена за ${formatDuration(car, car.deliveryDate)}`;
+    return "Доставена";
+  }
+  return `Чака ${formatDuration(car, end)}`;
+}
+
 function formatDuration(car, endDate = car.deliveryDate || today) {
+  if (hasApproximateDelivery(car)) {
+    const orderStart = car.orderDate || car.orderDateRangeStart;
+    const orderEnd = car.orderDate || car.orderDateRangeEnd || orderStart;
+    if (!orderStart) return "Продължителността е неизвестна";
+    const min = Math.max(0, daysBetween(orderEnd, car.deliveryDateRangeStart) ?? 0);
+    const max = Math.max(min, daysBetween(orderStart, car.deliveryDateRangeEnd) ?? min);
+    return min === max ? `около ${min} дни` : `около ${min}–${max} дни`;
+  }
   if (car.orderDateApproximate && car.orderDateRangeStart && car.orderDateRangeEnd) {
     const min = Math.max(0, daysBetween(car.orderDateRangeEnd, endDate) ?? 0);
     const max = Math.max(min, daysBetween(car.orderDateRangeStart, endDate) ?? min);
@@ -142,6 +183,14 @@ function safeCars(value) {
       color: COLORS.some(({ id }) => id === car.color) ? car.color : null,
       orderDate: isValidISODate(car.orderDate) ? car.orderDate : null,
       deliveryDate: isValidISODate(car.deliveryDate) ? car.deliveryDate : null,
+      ...(STATUSES.has(car.status) ? { status: car.status } : {}),
+      ...(typeof car.note === "string" && car.note.trim() ? { note: car.note.trim() } : {}),
+      ...(car.deliveryDateApproximate === true ? {
+        deliveryDateApproximate: true,
+        deliveryDateNote: typeof car.deliveryDateNote === "string" ? car.deliveryDateNote : "Приблизителна дата",
+        deliveryDateRangeStart: isValidISODate(car.deliveryDateRangeStart) ? car.deliveryDateRangeStart : null,
+        deliveryDateRangeEnd: isValidISODate(car.deliveryDateRangeEnd) ? car.deliveryDateRangeEnd : null,
+      } : {}),
       ...(car.orderDateApproximate === true ? {
         orderDateApproximate: true,
         orderDateNote: typeof car.orderDateNote === "string" ? car.orderDateNote : "Приблизителна дата",
@@ -170,9 +219,8 @@ function rowDetailText(car) {
   const color = getColor(car.color)?.name || "Не е посочено";
   const model = car.model || "Не е посочено";
   const orderText = displayedDate(car);
-  const deliveryText = car.deliveryDate ? formatISODate(car.deliveryDate) : "Очаква доставка";
-  const duration = formatDuration(car);
-  return `${car.name}. Оборудване: ${model}. Цвят: ${color}. Поръчка: ${orderText}. Доставка: ${deliveryText}. ${car.deliveryDate ? "Доставена за " : "Чака "}${duration}.`;
+  const note = car.note ? ` Бележка: ${car.note.replace(/\.$/, "")}.` : "";
+  return `${car.name}. Оборудване: ${model}. Цвят: ${color}. Поръчка: ${orderText}. Доставка: ${displayedDelivery(car)}. ${durationText(car, today)}.${note}`;
 }
 
 function showSelectedDetail(car) {
@@ -249,7 +297,8 @@ function appendCarRow(car, start, end, timelineWidth, markers) {
 
   const subline = makeElement("span", "car-subline");
   const color = getColor(car.color);
-  const status = makeElement("span", `car-status ${car.deliveryDate ? "delivered" : "waiting"}`, car.deliveryDate ? "Доставена" : "Очаква доставка");
+  const carState = carStatus(car);
+  const status = makeElement("span", `car-status ${carState}`, STATUS_LABELS[carState]);
   const model = makeElement("span", "", car.model || "Не е посочено");
   const colorDot = makeElement("span", "color-dot");
   if (color) colorDot.style.backgroundColor = color.hex;
@@ -257,6 +306,7 @@ function appendCarRow(car, start, end, timelineWidth, markers) {
   const colorName = makeElement("span", "", color?.name || "Не е посочено");
   subline.append(model, makeElement("span", "", "·"), colorDot, colorName);
   info.append(subline, status);
+  if (car.note) info.append(makeElement("span", "car-note", car.note));
   label.append(info);
 
   if (currentUser?.uid === ADMIN_UID) {
@@ -281,7 +331,8 @@ function appendCarRow(car, start, end, timelineWidth, markers) {
   chart.style.width = `${timelineWidth}px`;
   appendMonthTicks(chart, markers, "month-tick chart-month-tick");
   const orderStart = car.orderDate || car.orderDateRangeStart;
-  const orderEnd = car.deliveryDate || end;
+  const approximateDelivery = carStatus(car) === "delivered" && hasApproximateDelivery(car);
+  const orderEnd = car.deliveryDate || (approximateDelivery ? car.deliveryDateRangeEnd : null) || end;
   const track = makeElement("div", "bar-track");
   track.style.width = `${timelineWidth}px`;
   const totalDays = Math.max(1, daysBetween(start, end) ?? 1);
@@ -292,7 +343,7 @@ function appendCarRow(car, start, end, timelineWidth, markers) {
   const spanDays = Math.max(0, (daysBetween(orderStart, orderEnd) ?? 0));
   const visibleWidth = Math.max(0, right - left);
   const isSameDay = Boolean(car.deliveryDate && spanDays === 0);
-  const bar = makeElement("button", `bar ${car.deliveryDate ? "delivered" : "waiting"}${car.orderDateApproximate ? " approximate" : ""}${rawStartOffset < 0 ? " pre-start" : ""}${isSameDay ? " same-day" : ""}`);
+  const bar = makeElement("button", `bar ${carState}${car.orderDateApproximate ? " approximate" : ""}${approximateDelivery ? " delivery-approximate" : ""}${rawStartOffset < 0 ? " pre-start" : ""}${isSameDay ? " same-day" : ""}`);
   bar.type = "button";
   bar.style.left = `${left}px`;
   bar.style.width = `${Math.max(visibleWidth, 3)}px`;
@@ -308,16 +359,20 @@ function appendCarRow(car, start, end, timelineWidth, markers) {
     const visibleApproximate = Math.max(0, rangeEnd - rangeStart);
     bar.style.setProperty("--uncertain-width", `${visibleApproximate}px`);
   }
+  if (approximateDelivery) {
+    const deliveryStartX = Math.max(0, Math.min(timelineWidth, ((daysBetween(start, car.deliveryDateRangeStart) ?? 0) / totalDays) * timelineWidth));
+    bar.style.setProperty("--delivery-uncertain-width", `${Math.max(0, right - deliveryStartX)}px`);
+  }
   const tooltip = makeElement("span", "bar-tooltip", details);
   tooltip.id = `tooltip-${car.id}`;
   tooltip.setAttribute("role", "tooltip");
-  const durationText = car.deliveryDate ? `Доставена за ${formatDuration(car, car.deliveryDate)}` : `Чака ${formatDuration(car, end)}`;
-  const caption = makeElement("span", `bar-caption${car.deliveryDate ? " is-delivered" : ""}`, `${durationText}${car.orderDateApproximate ? " · приблизително" : ""}`);
+  const captionText = durationText(car, end);
+  const caption = makeElement("span", `bar-caption${carState === "delivered" ? " is-delivered" : ""}`, `${captionText}${car.orderDateApproximate || approximateDelivery ? " · приблизително" : ""}`);
   caption.style.left = `${left + Math.max(isSameDay ? 3 : visibleWidth, 0) + 9}px`;
   track.append(bar, tooltip, caption);
   chart.append(track);
   chartScroll.append(chart);
-  const summary = makeElement("div", "car-summary", `Поръчка: ${displayedDate(car)} · ${car.deliveryDate ? `Доставка: ${formatISODate(car.deliveryDate)} · Доставена за ${formatDuration(car, car.deliveryDate)}` : `Чака ${formatDuration(car, end)}`}`);
+  const summary = makeElement("div", "car-summary", `Поръчка: ${displayedDate(car)} · Доставка: ${displayedDelivery(car)} · ${captionText}${car.note ? ` · Бележка: ${car.note}` : ""}`);
   row.append(label, chartScroll, summary);
   return row;
 }
@@ -342,7 +397,7 @@ function render() {
   const visible = filteredCars();
   updateCount(visible.length);
   els["admin-actions"].classList.toggle("hidden", currentUser?.uid !== ADMIN_UID);
-  els["seed-button"].classList.toggle("hidden", currentUser?.uid !== ADMIN_UID || hasTrackerDocument);
+  els["seed-button"].classList.toggle("hidden", currentUser?.uid !== ADMIN_UID);
   els["empty-state"].classList.toggle("hidden", visible.length > 0);
   els["timeline-wrap"].classList.toggle("hidden", visible.length === 0);
   if (!cars.length) {
@@ -456,6 +511,8 @@ function openCarForm(car = null) {
   populateFormColors(car?.color || "");
   form.elements.orderDate.value = car?.orderDate || "";
   form.elements.deliveryDate.value = car?.deliveryDate || "";
+  form.elements.status.value = car?.status || "";
+  form.elements.note.value = car?.note || "";
   if (car?.orderDateApproximate) {
     els["approximate-preserve"].textContent = `Съществуваща приблизителна дата: „${car.orderDateNote}“ (${formatISODate(car.orderDateRangeStart)} – ${formatISODate(car.orderDateRangeEnd)}). Ако оставите датата на поръчката празна, този диапазон ще бъде запазен.`;
     els["approximate-preserve"].classList.remove("hidden");
@@ -470,6 +527,10 @@ function validateCarForm(formData, existing) {
   const colorValue = String(formData.get("color") || "");
   const orderDateValue = String(formData.get("orderDate") || "");
   const deliveryDateValue = String(formData.get("deliveryDate") || "");
+  const statusValue = String(formData.get("status") || "");
+  const note = String(formData.get("note") || "").trim().replace(/\s+/g, " ");
+  if (statusValue && !STATUSES.has(statusValue)) throw new Error("Изберете валиден статус.");
+  if (note.length > 300) throw new Error("Бележката може да е най-много 300 знака.");
   if (!name) throw new Error("Въведете име или псевдоним.");
   if (name.length > 80) throw new Error("Името може да е най-много 80 знака.");
   if (modelValue && !MODELS.has(modelValue)) throw new Error("Изберете валидно ниво на оборудване.");
@@ -503,6 +564,19 @@ function validateCarForm(formData, existing) {
     }
     deliveryDate = deliveryDateValue;
   }
+  if (deliveryDate && statusValue && statusValue !== "delivered") {
+    throw new Error("Датата на доставка е възможна само за статус „Доставена“ или автоматичен статус.");
+  }
+  let deliveryApproximateFields = {};
+  if (!deliveryDate && statusValue === "delivered") {
+    if (!existing?.deliveryDateApproximate) throw new Error("За статус „Доставена“ въведете дата на доставка.");
+    deliveryApproximateFields = {
+      deliveryDateApproximate: true,
+      deliveryDateNote: existing.deliveryDateNote,
+      deliveryDateRangeStart: existing.deliveryDateRangeStart,
+      deliveryDateRangeEnd: existing.deliveryDateRangeEnd,
+    };
+  }
 
   return {
     id: existing?.id || crypto.randomUUID(),
@@ -511,6 +585,9 @@ function validateCarForm(formData, existing) {
     color: colorValue || null,
     orderDate,
     deliveryDate,
+    ...(statusValue ? { status: statusValue } : {}),
+    ...(note ? { note } : {}),
+    ...deliveryApproximateFields,
     ...approximateFields,
   };
 }
@@ -581,20 +658,179 @@ async function deleteCar(car) {
   }
 }
 
-async function importSeedData() {
-  if (currentUser?.uid !== ADMIN_UID || hasTrackerDocument) return;
-  if (!window.confirm(`Ще се добавят ${seedCars.length} начални записа. Ако документът вече съществува, импортът ще бъде отказан без промяна. Продължаване?`)) return;
+const FIELD_LABELS = {
+  name: "Име", model: "Оборудване", color: "Цвят", orderDate: "Дата на поръчката", deliveryDate: "Дата на доставка",
+  status: "Статус", note: "Бележка", orderDateApproximate: "Приблизителна поръчка", orderDateNote: "Бележка за приблизителна поръчка",
+  orderDateRangeStart: "Начало на диапазон на поръчката", orderDateRangeEnd: "Край на диапазон на поръчката",
+  deliveryDateApproximate: "Приблизителна доставка", deliveryDateNote: "Бележка за приблизителна доставка",
+  deliveryDateRangeStart: "Начало на диапазон на доставката", deliveryDateRangeEnd: "Край на диапазон на доставката",
+};
+let importState = null;
+
+function stableStringify(value) {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+// Отпечатък на засегнатите записи: ако се промени след прегледа, записът се отказва.
+function importFingerprint(current) {
+  const ids = [...new Set([...seedCars.map((car) => car.id), ...seedUpdates.map((update) => update.id)])].sort();
+  return stableStringify(ids.map((id) => current.find((car) => car?.id === id) ?? null));
+}
+
+function applyUpdate(car, update, useProposed = new Set()) {
+  const next = { ...car, ...update.set };
+  for (const field of update.remove || []) delete next[field];
+  for (const [field, value] of Object.entries(update.conflicts || {})) {
+    if (useProposed.has(`${car.id}.${field}`)) next[field] = value;
+  }
+  return next;
+}
+
+function buildImportPlan(current) {
+  const byId = new Map(current.filter((car) => car && typeof car.id === "string").map((car) => [car.id, car]));
+  const updatesById = new Map(seedUpdates.map((update) => [update.id, update]));
+  const additions = [];
+  for (const seed of seedCars) {
+    if (byId.has(seed.id)) continue;
+    const update = updatesById.get(seed.id);
+    additions.push(update ? applyUpdate(seed, update) : { ...seed });
+  }
+  const changes = [];
+  for (const update of seedUpdates) {
+    const car = byId.get(update.id);
+    if (!car) continue;
+    const fields = [];
+    for (const [field, value] of Object.entries(update.set)) {
+      if (stableStringify(car[field]) !== stableStringify(value)) fields.push({ field, from: car[field], to: value });
+    }
+    for (const field of update.remove || []) if (field in car) fields.push({ field, from: car[field], to: undefined });
+    const conflicts = [];
+    for (const [field, value] of Object.entries(update.conflicts || {})) {
+      if (car[field] !== value) conflicts.push({ key: `${car.id}.${field}`, field, from: car[field], to: value });
+    }
+    if (fields.length || conflicts.length) changes.push({ id: car.id, name: car.name, fields, conflicts });
+  }
+  return { additions, changes, skipped: seedCars.length - additions.length };
+}
+
+function previewValue(field, value) {
+  if (value === undefined || value === null || value === "") return "—";
+  if (field === "color") return getColor(value)?.name || String(value);
+  if (field === "status") return STATUS_LABELS[value] || String(value);
+  if (/Date$/.test(field)) return isValidISODate(value) ? formatISODate(value) : String(value);
+  return String(value);
+}
+
+async function readRawCars() {
+  const snapshot = await getDoc(doc(db, ...TRACKER_REF_PATH));
+  const current = snapshot.exists() ? snapshot.data().cars : [];
+  if (!Array.isArray(current)) throw new Error("Полето cars в Firestore не е масив; импортът е прекъснат.");
+  return current;
+}
+
+function renderImportPreview(plan) {
+  const container = els["import-preview"];
+  container.replaceChildren();
+  container.append(makeElement("p", "import-summary", `Нови записи: ${plan.additions.length} · Записи с промени: ${plan.changes.length} · Вече съществуват без промяна: ${plan.skipped}`));
+  if (plan.additions.length) {
+    container.append(makeElement("h3", "import-heading", "Нови записи"));
+    const list = makeElement("ul", "import-list");
+    for (const car of plan.additions) {
+      list.append(makeElement("li", "", `${car.name} · ${previewValue("orderDate", car.orderDate)} · ${car.model || "—"} · ${previewValue("color", car.color)}${car.note ? ` · ${car.note}` : ""}`));
+    }
+    container.append(list);
+  }
+  if (plan.changes.length) container.append(makeElement("h3", "import-heading", "Променени полета"));
+  for (const change of plan.changes) {
+    const block = makeElement("div", "import-change");
+    block.append(makeElement("strong", "", change.name));
+    const list = makeElement("ul", "import-list");
+    for (const item of change.fields) {
+      list.append(makeElement("li", "", `${FIELD_LABELS[item.field] || item.field}: ${previewValue(item.field, item.from)} → ${item.to === undefined ? "(премахва се)" : previewValue(item.field, item.to)}`));
+    }
+    block.append(list);
+    for (const conflict of change.conflicts) {
+      const fieldset = makeElement("fieldset", "import-conflict");
+      fieldset.append(makeElement("legend", "", `Конфликт — ${FIELD_LABELS[conflict.field] || conflict.field}`));
+      for (const [value, text] of [["keep", `Запази съществуващата: ${previewValue(conflict.field, conflict.from)}`], ["use", `Използвай новата: ${previewValue(conflict.field, conflict.to)}`]]) {
+        const label = makeElement("label", "import-choice");
+        const input = document.createElement("input");
+        input.type = "radio";
+        input.name = `conflict:${conflict.key}`;
+        input.value = value;
+        input.checked = value === "keep";
+        label.append(input, makeElement("span", "", text));
+        fieldset.append(label);
+      }
+      block.append(fieldset);
+    }
+    container.append(block);
+  }
+  if (!plan.additions.length && !plan.changes.length) container.append(makeElement("p", "", "Няма нови записи или промени за прилагане."));
+  els["import-confirm"].disabled = !plan.additions.length && !plan.changes.length;
+}
+
+async function openImportPreview() {
+  if (currentUser?.uid !== ADMIN_UID || !db) return;
+  els["import-error"].textContent = "";
   try {
-    showNotice("Импортиране на началните данни…", "info");
-    const reference = doc(db, ...TRACKER_REF_PATH);
-    await runTransaction(db, async (transaction) => {
-      const snapshot = await transaction.get(reference);
-      if (snapshot.exists()) throw new Error("Импортът е еднократен: документът вече съществува и не е променен.");
-      transaction.set(reference, { cars: seedCars });
-    });
-    showNotice("Началните данни са импортирани успешно.", "success", 5000);
+    const current = await readRawCars();
+    const plan = buildImportPlan(current);
+    importState = { fingerprint: importFingerprint(current) };
+    renderImportPreview(plan);
+    if (!els["import-dialog"].open) openDialog(els["import-dialog"]);
   } catch (error) {
-    showNotice(`Импортът не беше изпълнен: ${error.message || "неизвестна грешка"}`, "error");
+    showNotice(`Прегледът не беше зареден: ${error.message || "неизвестна грешка"}`, "error");
+  }
+}
+
+async function confirmImport(event) {
+  event.preventDefault();
+  if (currentUser?.uid !== ADMIN_UID || !db || !importState) return;
+  const useProposed = new Set(
+    [...els["import-form"].querySelectorAll("input[type=radio]:checked")]
+      .filter((input) => input.value === "use")
+      .map((input) => input.name.slice("conflict:".length)),
+  );
+  const expected = importState.fingerprint;
+  els["import-confirm"].disabled = true;
+  try {
+    const reference = doc(db, ...TRACKER_REF_PATH);
+    const result = await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(reference);
+      const exists = snapshot.exists();
+      const current = exists ? snapshot.data().cars : [];
+      if (!Array.isArray(current)) throw new Error("Полето cars в Firestore не е масив; импортът е прекъснат.");
+      if (importFingerprint(current) !== expected) {
+        const stale = new Error("stale");
+        stale.stale = true;
+        throw stale;
+      }
+      const plan = buildImportPlan(current);
+      const updatesById = new Map(seedUpdates.map((update) => [update.id, update]));
+      const changedIds = new Set(plan.changes.map((change) => change.id));
+      const next = current.map((car) => (changedIds.has(car?.id) ? applyUpdate(car, updatesById.get(car.id), useProposed) : car));
+      next.push(...plan.additions);
+      if (new Set(next.map((car) => car?.id)).size !== next.length) throw new Error("ID на автомобилите трябва да са уникални.");
+      if (plan.additions.length || plan.changes.length || !exists) transaction.set(reference, { cars: next });
+      return { added: plan.additions.length, updated: plan.changes.length, skipped: plan.skipped, conflictsApplied: useProposed.size };
+    });
+    closeDialog(els["import-dialog"]);
+    importState = null;
+    showNotice(`Импортът приключи: добавени ${result.added}, актуализирани ${result.updated}, пропуснати ${result.skipped}, приложени конфликтни избори ${result.conflictsApplied}.`, "success", 8000);
+  } catch (error) {
+    if (error.stale) {
+      els["import-error"].textContent = "Данните са променени след прегледа. Прегледът е опреснен — проверете го отново.";
+      await openImportPreview();
+      els["import-error"].textContent = "Данните са променени след прегледа. Прегледът е опреснен — проверете го отново.";
+    } else {
+      els["import-error"].textContent = `Импортът не беше изпълнен: ${error.message || "неизвестна грешка"}`;
+      els["import-confirm"].disabled = false;
+    }
   }
 }
 
@@ -692,7 +928,8 @@ function installEvents() {
     }
   });
   els["add-car-button"].addEventListener("click", () => openCarForm());
-  els["seed-button"].addEventListener("click", importSeedData);
+  els["seed-button"].addEventListener("click", openImportPreview);
+  els["import-form"].addEventListener("submit", confirmImport);
   els["car-form"].addEventListener("submit", saveCar);
   document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => closeDialog(document.getElementById(button.dataset.close))));
   document.querySelectorAll("dialog").forEach((dialog) => dialog.addEventListener("click", (event) => {

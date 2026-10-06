@@ -57,7 +57,7 @@
               <button id="clear-filters" class="text-button" type="button">Изчисти филтрите</button>
             </div>
             <div id="admin-actions" class="admin-actions hidden">
-              <button id="seed-button" class="button button-outline hidden" type="button">Импортирай началните данни</button>
+              <button id="seed-button" class="button button-outline hidden" type="button">Импортирай и актуализирай данните</button>
               <button id="add-car-button" class="button button-primary" type="button"><span aria-hidden="true">＋</span> Добави кола</button>
             </div>
           </div>
@@ -88,6 +88,7 @@
         <section class="legend" aria-label="Легенда">
           <div class="legend-item"><span class="legend-swatch legend-delivered"></span><span>Доставена</span></div>
           <div class="legend-item"><span class="legend-swatch legend-waiting"></span><span>Очаква доставка</span></div>
+          <div class="legend-item"><span class="legend-swatch legend-switched"></span><span>Преминава към друг модел</span></div>
           <div class="legend-item"><span class="legend-approx"></span><span>Приблизителна дата</span></div>
           <p class="legend-note">Лентите започват от датата на поръчката. Лява стрелка означава, че поръчката е преди началото на оста.</p>
         </section>
@@ -113,6 +114,16 @@
       </form>
     </dialog>
 
+    <dialog id="import-dialog" class="modal">
+      <form id="import-form" class="modal-card">
+        <button class="modal-close" type="button" data-close="import-dialog" aria-label="Затвори">×</button>
+        <p class="eyebrow eyebrow-muted">АДМИНИСТРАЦИЯ</p><h2>Преглед на импорта</h2>
+        <div id="import-preview" class="import-preview"></div>
+        <p id="import-error" class="form-error" role="alert"></p>
+        <div class="modal-actions"><button class="button button-outline" type="button" data-close="import-dialog">Отказ</button><button id="import-confirm" class="button button-primary" type="submit">Потвърди импорта</button></div>
+      </form>
+    </dialog>
+
     <dialog id="car-dialog" class="modal">
       <form id="car-form" class="modal-card">
         <button class="modal-close" type="button" data-close="car-dialog" aria-label="Затвори">×</button>
@@ -126,6 +137,8 @@
         <label class="form-field"><span>Дата на поръчката</span><input name="orderDate" type="date"><small id="order-date-help">Задължителна за нов запис.</small></label>
         <div id="approximate-preserve" class="approximate-preserve hidden"></div>
         <label class="form-field"><span>Дата на доставка <em>незадължително</em></span><input name="deliveryDate" type="date"><small>Може да бъде добавена или изчистена по-късно.</small></label>
+        <label class="form-field"><span>Статус <em>незадължително</em></span><select name="status"><option value="">Автоматичен (по дата на доставка)</option><option value="waiting">Очаква доставка</option><option value="delivered">Доставена</option><option value="switched">Преминава към друг модел</option></select></label>
+        <label class="form-field"><span>Бележка <em>незадължително</em></span><textarea name="note" rows="2" maxlength="300"></textarea><small>Обещаните срокове се пазят само тук, не като действителна доставка.</small></label>
         <p id="car-form-error" class="form-error" role="alert"></p>
         <div class="modal-actions"><button class="button button-outline" type="button" data-close="car-dialog">Отказ</button><button class="button button-primary" type="submit">Запази</button></div>
       </form>
