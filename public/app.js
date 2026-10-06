@@ -32,7 +32,7 @@ const COLORS = [
   { id: "white", name: "Бял — неуточнен нюанс", hex: "#ECEDEE" },
   { id: "black", name: "Черен — неуточнен нюанс", hex: "#252729" },
 ];
-const MODELS = new Set(["Basic", "Comfort", "Premium"]);
+const MODELS = new Set(["Comfort", "Premium"]);
 const STATUSES = new Set(["waiting", "delivered", "switched"]);
 const STATUS_LABELS = { waiting: "Очаква доставка", delivered: "Доставена", switched: "Преминава към друг модел" };
 const TRACKER_REF_PATH = ["tracker", "data"];
