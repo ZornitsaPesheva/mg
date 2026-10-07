@@ -38,7 +38,32 @@ export const seedCars = [
   deliveryDate: null,
   note: "Батерия 54 kWh"
 },
-
+  {
+    "id": "yordan-hristov",
+    "name": "Yordan Hristov",
+    "model": "Comfort",
+    "color": "stone-green",
+    "orderDate": "2026-06-20",
+    "deliveryDate": null,
+    "note": "Батерия 54 kWh. Срок за доставка 120 дни"
+  },
+  {
+    "id": "bai-ivan",
+    "name": "Bai Ivan",
+    "model": "Premium",
+    "color": "red",
+    "orderDate": "2026-09-25",
+    "deliveryDate": null,
+    "note": "Батерия 54 kWh. Срок за доставка 210 дни"
+  },
+  {
+    "id": "radosvet-ivanov",
+    "name": "Radosvet Ivanov",
+    "model": null,
+    "color": null,
+    "orderDate": "2026-08-20",
+    "deliveryDate": null
+  }
 ];
 
 // set/remove се прилагат след преглед; conflicts никога не се прилагат без избор на администратора.
