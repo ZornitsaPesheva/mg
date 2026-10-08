@@ -32,13 +32,14 @@ const COLORS = [
   { id: "white", name: "Бял — неуточнен нюанс", hex: "#ECEDEE" },
   { id: "black", name: "Черен — неуточнен нюанс", hex: "#252729" },
 ];
-const MODELS = new Set(["Comfort", "Premium"]);
+const MODELS = new Set(["Basic", "Comfort", "Premium"]);
 const STATUSES = new Set(["waiting", "delivered", "switched"]);
 const STATUS_LABELS = { waiting: "Очаква доставка", delivered: "Доставена", switched: "Преминава към друг модел" };
 const TRACKER_REF_PATH = ["tracker", "data"];
 const axisStorageKey = "mg4-urban-timeline-start";
 const els = Object.fromEntries([
   "connection-pill", "connection-text", "login-button", "logout-button", "admin-actions", "seed-button", "add-car-button", "import-dialog", "import-form", "import-preview", "import-error", "import-confirm",
+  "order-import-panel", "parse-orders-text", "parse-orders-button", "parse-orders-status", "order-review",
   "today-label", "visible-count", "count-label", "model-filter", "color-filter", "clear-filters", "notice", "empty-state",
   "empty-title", "empty-description", "timeline-wrap", "timeline", "selected-detail", "axis-start", "footer-year",
   "login-dialog", "login-form", "login-error", "car-dialog", "car-form", "car-form-title", "car-color-select",
@@ -57,6 +58,8 @@ let unsubscribeCars = null;
 let timelinePlotWidth = 0;
 let timelineZoom = 1;
 let fitFullPeriod = true;
+let parsedOrders = [];
+let ordersRequestInProgress = false;
 
 function configuredFirebase() {
   const required = ["apiKey", "authDomain", "projectId", "messagingSenderId", "appId"];
@@ -398,6 +401,7 @@ function render() {
   updateCount(visible.length);
   els["admin-actions"].classList.toggle("hidden", currentUser?.uid !== ADMIN_UID);
   els["seed-button"].classList.toggle("hidden", currentUser?.uid !== ADMIN_UID);
+  els["order-import-panel"].classList.toggle("hidden", currentUser?.uid !== ADMIN_UID);
   els["empty-state"].classList.toggle("hidden", visible.length > 0);
   els["timeline-wrap"].classList.toggle("hidden", visible.length === 0);
   if (!cars.length) {
@@ -834,6 +838,199 @@ async function confirmImport(event) {
   }
 }
 
+function reviewField(labelText, control) {
+  const label = makeElement("label", "form-field order-review-field");
+  label.append(makeElement("span", "", labelText), control);
+  return label;
+}
+
+function createReviewSelect(value, options) {
+  const select = document.createElement("select");
+  for (const [optionValue, text] of options) {
+    const option = document.createElement("option");
+    option.value = optionValue;
+    option.textContent = text;
+    select.append(option);
+  }
+  select.value = value || "";
+  return select;
+}
+
+function renderOrderReview(deliveryTermNotice = null) {
+  const container = els["order-review"];
+  container.replaceChildren();
+  container.classList.toggle("hidden", !parsedOrders.length);
+  if (!parsedOrders.length) return;
+
+  container.append(makeElement("h3", "import-heading", "Преглед и редакция"));
+  if (deliveryTermNotice) container.append(makeElement("p", "delivery-term-notice", deliveryTermNotice));
+
+  parsedOrders.forEach((order, index) => {
+    const card = makeElement("fieldset", "order-review-card");
+    card.append(makeElement("legend", "", `Поръчка ${index + 1}`));
+    const name = document.createElement("input");
+    name.type = "text";
+    name.maxLength = 80;
+    name.required = true;
+    name.value = order.name || "";
+    name.dataset.field = "name";
+    card.append(reviewField("Име или псевдоним", name));
+
+    const model = createReviewSelect(order.model, [["", "Не е посочено"], ["Basic", "Basic"], ["Comfort", "Comfort"], ["Premium", "Premium"]]);
+    model.dataset.field = "model";
+    const color = createReviewSelect(order.color, [["", "Не е посочено"], ...COLORS.map(({ id, name: colorName }) => [id, colorName])]);
+    color.dataset.field = "color";
+    const vehicleFields = makeElement("div", "order-review-grid");
+    vehicleFields.append(reviewField("Оборудване", model), reviewField("Цвят", color));
+    card.append(vehicleFields);
+
+    const orderDate = document.createElement("input");
+    orderDate.type = "date";
+    orderDate.required = true;
+    orderDate.value = order.orderDate || "";
+    orderDate.dataset.field = "orderDate";
+    const deliveryDate = document.createElement("input");
+    deliveryDate.type = "date";
+    deliveryDate.value = order.deliveryDate || "";
+    deliveryDate.dataset.field = "deliveryDate";
+    const dateFields = makeElement("div", "order-review-grid");
+    dateFields.append(reviewField("Дата на поръчката (задължителна)", orderDate), reviewField("Реална дата на доставка", deliveryDate));
+    card.append(dateFields);
+
+    const status = createReviewSelect(order.status, [
+      ["", "Автоматично"],
+      ["waiting", "Очаква доставка"],
+      ["delivered", "Доставена"],
+      ["switched", "Преминава към друг модел"],
+    ]);
+    status.dataset.field = "status";
+    card.append(reviewField("Статус", status));
+
+    const note = document.createElement("textarea");
+    note.rows = 2;
+    note.maxLength = 300;
+    note.value = order.note || "";
+    note.dataset.field = "note";
+    card.append(reviewField("Бележка", note));
+
+    if (order.deliveryTerm) {
+      card.append(makeElement("p", "delivery-term-notice", `Посочен срок за доставка: ${order.deliveryTerm}. Той не се записва, защото приложението няма отделно поле за срок.`));
+    }
+
+    const remove = makeElement("button", "text-button order-remove-button", "Премахни записа");
+    remove.type = "button";
+    remove.addEventListener("click", () => {
+      parsedOrders.splice(index, 1);
+      renderOrderReview(deliveryTermNotice);
+      if (!parsedOrders.length) els["parse-orders-status"].textContent = "Всички извлечени записи са премахнати.";
+    });
+    card.append(remove);
+    container.append(card);
+  });
+
+  const add = makeElement("button", "button button-primary", "Добави");
+  add.type = "button";
+  add.disabled = ordersRequestInProgress;
+  add.addEventListener("click", saveParsedOrders);
+  container.append(add);
+}
+
+async function postAdminRequest(path, body) {
+  if (currentUser?.uid !== ADMIN_UID) throw new Error("Нямате права за това действие.");
+  let token;
+  try {
+    token = await currentUser.getIdToken();
+  } catch {
+    throw new Error("Сесията е невалидна или е изтекла. Влезте отново.");
+  }
+  let response;
+  try {
+    response = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error("Сървърът не е достъпен. Проверете връзката и опитайте отново.");
+  }
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error("Сървърът върна невалиден отговор. Опитайте отново.");
+  }
+  if (!response.ok) {
+    throw new Error(typeof result.error === "string" ? result.error : "Заявката не беше изпълнена.");
+  }
+  return result;
+}
+
+function readReviewedOrders() {
+  return [...els["order-review"].querySelectorAll(".order-review-card")].map((card) => {
+    const values = Object.fromEntries(
+      [...card.querySelectorAll("[data-field]")].map((field) => [field.dataset.field, field.value.trim() || null]),
+    );
+    return values;
+  });
+}
+
+async function extractOrders() {
+  if (ordersRequestInProgress || currentUser?.uid !== ADMIN_UID) return;
+  const text = els["parse-orders-text"].value;
+  els["parse-orders-status"].textContent = "";
+  parsedOrders = [];
+  renderOrderReview();
+  ordersRequestInProgress = true;
+  els["parse-orders-button"].disabled = true;
+  els["parse-orders-button"].setAttribute("aria-busy", "true");
+  els["parse-orders-status"].textContent = "Извличане на поръчките…";
+  try {
+    const result = await postAdminRequest("/api/parse-orders", { text });
+    if (!Array.isArray(result.orders)) throw new Error("Сървърът върна невалиден списък с поръчки.");
+    parsedOrders = result.orders;
+    renderOrderReview(result.deliveryTermNotice);
+    els["parse-orders-status"].textContent = parsedOrders.length
+      ? `Извлечени записи: ${parsedOrders.length}. Проверете и редактирайте ги преди добавяне.`
+      : "Не бяха открити поръчки.";
+  } catch (error) {
+    els["parse-orders-status"].textContent = error.message || "Извличането не беше успешно.";
+  } finally {
+    ordersRequestInProgress = false;
+    els["parse-orders-button"].disabled = false;
+    els["parse-orders-button"].removeAttribute("aria-busy");
+  }
+}
+
+async function saveParsedOrders() {
+  if (ordersRequestInProgress || currentUser?.uid !== ADMIN_UID || !parsedOrders.length) return;
+  const form = els["order-review"];
+  const invalidField = form.querySelector(":invalid");
+  if (invalidField) {
+    invalidField.reportValidity();
+    return;
+  }
+  ordersRequestInProgress = true;
+  els["parse-orders-button"].disabled = true;
+  form.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+  els["parse-orders-status"].textContent = "Записване на одобрените поръчки…";
+  try {
+    const result = await postAdminRequest("/api/add-orders", { orders: readReviewedOrders() });
+    if (!Number.isInteger(result.added)) throw new Error("Сървърът върна невалиден резултат от записа.");
+    parsedOrders = [];
+    els["parse-orders-text"].value = "";
+    renderOrderReview();
+    els["parse-orders-status"].textContent = "";
+    showNotice(`Добавени са ${result.added} поръчки.`, "success", 5000);
+  } catch (error) {
+    els["parse-orders-status"].textContent = error.message || "Записът не беше успешен.";
+    renderOrderReview();
+  } finally {
+    ordersRequestInProgress = false;
+    els["parse-orders-button"].disabled = false;
+    form.querySelectorAll("button").forEach((button) => { button.disabled = false; });
+  }
+}
+
 function connectFirebase() {
   if (!configuredFirebase()) {
     setConnection("Нужна е настройка", "error");
@@ -928,6 +1125,7 @@ function installEvents() {
     }
   });
   els["add-car-button"].addEventListener("click", () => openCarForm());
+  els["parse-orders-button"].addEventListener("click", extractOrders);
   els["seed-button"].addEventListener("click", openImportPreview);
   els["import-form"].addEventListener("submit", confirmImport);
   els["car-form"].addEventListener("submit", saveCar);

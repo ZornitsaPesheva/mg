@@ -52,7 +52,7 @@
 
           <div class="toolbar">
             <div class="filters" aria-label="Филтри">
-              <label class="filter-control"><span>Оборудване</span><select id="model-filter"><option value="all">Всички</option><option value="Comfort">Comfort</option><option value="Premium">Premium</option><option value="none">Не е посочено</option></select></label>
+              <label class="filter-control"><span>Оборудване</span><select id="model-filter"><option value="all">Всички</option><option value="Basic">Basic</option><option value="Comfort">Comfort</option><option value="Premium">Premium</option><option value="none">Не е посочено</option></select></label>
               <label class="filter-control"><span>Цвят</span><select id="color-filter"><option value="all">Всички цветове</option></select></label>
               <button id="clear-filters" class="text-button" type="button">Изчисти филтрите</button>
             </div>
@@ -61,6 +61,15 @@
               <button id="add-car-button" class="button button-primary" type="button"><span aria-hidden="true">＋</span> Добави кола</button>
             </div>
           </div>
+
+          <section id="order-import-panel" class="order-import-panel hidden" aria-label="Извличане на поръчки от коментари">
+            <label class="form-field"><span>Коментари за извличане</span><textarea id="parse-orders-text" rows="5" maxlength="12000" placeholder="Поставете един или няколко коментара тук."></textarea></label>
+            <div class="order-import-actions">
+              <button id="parse-orders-button" class="button button-outline" type="button">Извлечи поръчките</button>
+              <span id="parse-orders-status" class="parse-orders-status" role="status" aria-live="polite"></span>
+            </div>
+            <div id="order-review" class="order-review hidden"></div>
+          </section>
 
           <div id="notice" class="notice hidden" role="status" aria-live="polite"></div>
           <div id="empty-state" class="empty-state hidden">
