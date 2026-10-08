@@ -12,7 +12,7 @@ import { validateOrdersForSaving, validateParsedOrders } from "./domain.js";
 dotenv.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../.env") });
 
 const ADMIN_UID = "Bsrl0QKJl8OGpJBDJzrN4jIC3ay2";
-const MODEL = "gemini-2.5-flash-lite";
+const MODEL = "gemini-3.5-flash-lite";
 const MAX_TEXT_LENGTH = 12_000;
 const MAX_BODY_LENGTH = 16_384;
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
@@ -162,7 +162,7 @@ async function parseOrders(req, res) {
     if (Number(error?.status) >= 500) {
       throw new HttpError(503, "Услугата за извличане временно не отговаря. Опитайте по-късно.");
     }
-    console.error("Gemini API заявката се провали.", error?.status || error?.code || "unknown");
+    console.error("Gemini API заявката се провали.", error?.status || error?.code || "unknown", String(error?.message || "").slice(0, 300));
     throw new HttpError(502, "Поръчките не бяха извлечени. Проверете текста и опитайте отново.");
   }
 
