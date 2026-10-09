@@ -36,6 +36,7 @@ const MODELS = new Set(["Basic", "Comfort", "Premium"]);
 const STATUSES = new Set(["waiting", "delivered", "switched"]);
 const STATUS_LABELS = { waiting: "Очаква доставка", delivered: "Доставена", switched: "Преминава към друг модел" };
 const TRACKER_REF_PATH = ["tracker", "data"];
+const ADMIN_REQUEST_TIMEOUT_MS = 35_000;
 const axisStorageKey = "mg4-urban-timeline-start";
 const els = Object.fromEntries([
   "connection-pill", "connection-text", "login-button", "logout-button", "admin-actions", "seed-button", "add-car-button", "import-dialog", "import-form", "import-preview", "import-error", "import-confirm",
@@ -944,14 +945,22 @@ async function postAdminRequest(path, body) {
     throw new Error("Сесията е невалидна или е изтекла. Влезте отново.");
   }
   let response;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), ADMIN_REQUEST_TIMEOUT_MS);
   try {
     response = await fetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
-  } catch {
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("Заявката отне твърде дълго. Проверете дали записът е добавен, преди да опитате отново.");
+    }
     throw new Error("Сървърът не е достъпен. Проверете връзката и опитайте отново.");
+  } finally {
+    window.clearTimeout(timeoutId);
   }
   let result;
   try {
