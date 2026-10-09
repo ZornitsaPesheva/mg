@@ -938,40 +938,55 @@ function renderOrderReview(deliveryTermNotice = null) {
 
 async function postAdminRequest(path, body) {
   if (currentUser?.uid !== ADMIN_UID) throw new Error("Нямате права за това действие.");
-  let token;
-  try {
-    token = await currentUser.getIdToken();
-  } catch {
-    throw new Error("Сесията е невалидна или е изтекла. Влезте отново.");
-  }
-  let response;
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), ADMIN_REQUEST_TIMEOUT_MS);
-  try {
-    response = await fetch(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (error?.name === "AbortError") {
-      throw new Error("Заявката отне твърде дълго. Проверете дали записът е добавен, преди да опитате отново.");
+  let timeoutId;
+  const request = async () => {
+    let token;
+    try {
+      token = await currentUser.getIdToken();
+    } catch {
+      throw new Error("Сесията е невалидна или е изтекла. Влезте отново.");
     }
-    throw new Error("Сървърът не е достъпен. Проверете връзката и опитайте отново.");
+
+    let response;
+    try {
+      response = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch {
+      throw new Error("Сървърът не е достъпен. Проверете връзката и опитайте отново.");
+    }
+
+    let result;
+    try {
+      result = await response.json();
+    } catch {
+      throw new Error("Сървърът върна невалиден отговор. Опитайте отново.");
+    }
+    if (!response.ok) {
+      throw new Error(typeof result.error === "string" ? result.error : "Заявката не беше изпълнена.");
+    }
+    return result;
+  };
+
+  try {
+    return await Promise.race([
+      request(),
+      new Promise((_, reject) => {
+        timeoutId = window.setTimeout(() => {
+          controller.abort();
+          reject(new Error(path === "/api/add-orders"
+            ? "Заявката отне твърде дълго. Проверете дали записът е добавен, преди да опитате отново."
+            : "Извличането отне твърде дълго. Проверете връзката и опитайте отново."));
+        }, ADMIN_REQUEST_TIMEOUT_MS);
+      }),
+    ]);
   } finally {
     window.clearTimeout(timeoutId);
   }
-  let result;
-  try {
-    result = await response.json();
-  } catch {
-    throw new Error("Сървърът върна невалиден отговор. Опитайте отново.");
-  }
-  if (!response.ok) {
-    throw new Error(typeof result.error === "string" ? result.error : "Заявката не беше изпълнена.");
-  }
-  return result;
 }
 
 function readReviewedOrders() {
@@ -1007,6 +1022,7 @@ async function extractOrders() {
     ordersRequestInProgress = false;
     els["parse-orders-button"].disabled = false;
     els["parse-orders-button"].removeAttribute("aria-busy");
+    els["order-review"].querySelectorAll("button").forEach((button) => { button.disabled = false; });
   }
 }
 
