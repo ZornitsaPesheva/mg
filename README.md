@@ -14,16 +14,16 @@ Cloud Functions изискват Firebase проект с активиран bil
 
 1. Създайте Firebase проект и Firestore Database в Firebase Console. Активирайте billing (Blaze план), необходим за Cloud Functions.
 2. В **Authentication → Sign-in method** включете **Email/Password**. Не включвайте публична регистрация от приложението.
-3. В **Authentication → Users** създайте администратора ръчно и копирайте неговия UID.
+3. В **Authentication → Users** създайте всеки администратор ръчно и копирайте UID адресите им.
 4. В **Project settings → Your apps** регистрирайте Web app. Поставете web конфигурацията в `public/firebase-config.js`. Това е стандартна публична Firebase web конфигурация, не парола или service-account ключ.
-5. Задайте същия UID в `ADMIN_UID` в `public/firebase-config.js` и заменете `REPLACE_WITH_ADMIN_UID` във `firestore.rules`. Не публикувайте правилата с примерния UID.
+5. Добавете UID адресите на администраторите в `ADMIN_UIDS` в `public/firebase-config.js`, `functions/index.js` и `firestore.rules`. Трите списъка трябва да съвпадат.
 6. Добавете домейна на сайта в **Authentication → Settings → Authorized domains**.
 7. Инсталирайте Firebase CLI като инструмент за разработка, влезте и свържете локалната папка с проекта:
    - `npm install -g firebase-tools`
    - `firebase login`
    - `firebase use --add`
 8. Добавете API ключа като Firebase secret за production (командата ще поиска стойността интерактивно; не я поставяйте в командния ред): `firebase functions:secrets:set GEMINI_API_KEY`. Локалният Functions emulator зарежда същото име от `.env` в корена на проекта чрез dotenv.
-9. Проверете, че администраторският UID във `functions/index.js` съвпада с `ADMIN_UID` в `public/firebase-config.js` и UID-а във `firestore.rules`.
+9. Проверете, че списъците `ADMIN_UIDS` в `functions/index.js`, `public/firebase-config.js` и `firestore.rules` съвпадат.
 10. Публикувайте backend-а, правилата и сайта: `firebase deploy --only functions,firestore:rules,hosting`.
 11. Отворете публикувания сайт, влезте с акаунта на администратора и натиснете **Импортирай началните данни**. Импортът е транзакционен и се изпълнява само ако документът `tracker/data` още не съществува. Ако документът вече съществува, няма да бъде презаписан; добавянето и редактирането пак работят.
 

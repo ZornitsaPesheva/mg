@@ -14,7 +14,7 @@ import {
   runTransaction,
   getDoc,
 } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
-import { firebaseConfig, ADMIN_UID, TIMELINE_DEFAULT_START } from "./firebase-config.js";
+import { firebaseConfig, ADMIN_UIDS, TIMELINE_DEFAULT_START } from "./firebase-config.js";
 import { seedCars, seedUpdates } from "./seed-data.js";
 import { daysBetween, formatISODate, getSofiaDate, isValidISODate, monthName } from "./date-utils.js";
 
@@ -32,6 +32,7 @@ const COLORS = [
   { id: "white", name: "Бял — неуточнен нюанс", hex: "#ECEDEE" },
   { id: "black", name: "Черен — неуточнен нюанс", hex: "#252729" },
 ];
+const DROPDOWN_COLORS = COLORS.filter(({ id }) => !["red", "white", "black"].includes(id));
 const MODELS = new Set(["Basic", "Comfort", "Premium"]);
 const STATUSES = new Set(["waiting", "delivered", "switched"]);
 const STATUS_LABELS = { waiting: "Очаква доставка", delivered: "Доставена", switched: "Преминава към друг модел" };
@@ -61,6 +62,10 @@ let timelineZoom = 1;
 let fitFullPeriod = true;
 let parsedOrders = [];
 let ordersRequestInProgress = false;
+
+function isAdmin(user = currentUser) {
+  return Boolean(user && ADMIN_UIDS.includes(user.uid));
+}
 
 function configuredFirebase() {
   const required = ["apiKey", "authDomain", "projectId", "messagingSenderId", "appId"];
@@ -104,7 +109,7 @@ function getColor(colorId) {
 }
 
 function populateColorOptions() {
-  for (const color of COLORS) {
+  for (const color of DROPDOWN_COLORS) {
     const filterOption = document.createElement("option");
     filterOption.value = color.id;
     filterOption.textContent = color.name;
@@ -313,7 +318,7 @@ function appendCarRow(car, start, end, timelineWidth, markers) {
   if (car.note) info.append(makeElement("span", "car-note", car.note));
   label.append(info);
 
-  if (currentUser?.uid === ADMIN_UID) {
+  if (isAdmin()) {
     const actions = makeElement("span", "row-actions");
     const edit = makeElement("button", "icon-button", "✎");
     edit.type = "button";
@@ -400,14 +405,14 @@ function updateScaleControls() {
 function render() {
   const visible = filteredCars();
   updateCount(visible.length);
-  els["admin-actions"].classList.toggle("hidden", currentUser?.uid !== ADMIN_UID);
-  els["seed-button"].classList.toggle("hidden", currentUser?.uid !== ADMIN_UID);
-  els["order-import-panel"].classList.toggle("hidden", currentUser?.uid !== ADMIN_UID);
+  els["admin-actions"].classList.toggle("hidden", !isAdmin());
+  els["seed-button"].classList.toggle("hidden", !isAdmin());
+  els["order-import-panel"].classList.toggle("hidden", !isAdmin());
   els["empty-state"].classList.toggle("hidden", visible.length > 0);
   els["timeline-wrap"].classList.toggle("hidden", visible.length === 0);
   if (!cars.length) {
     els["empty-title"].textContent = "Все още няма записи";
-    els["empty-description"].textContent = currentUser?.uid === ADMIN_UID && !hasTrackerDocument
+    els["empty-description"].textContent = isAdmin() && !hasTrackerDocument
       ? "Импортирайте началните данни или добавете първата кола."
       : "Когато бъдат добавени поръчки, ще се появят тук.";
   } else if (!visible.length) {
@@ -613,7 +618,7 @@ async function transactCars(mutator) {
 async function saveCar(event) {
   event.preventDefault();
   els["car-form-error"].textContent = "";
-  if (currentUser?.uid !== ADMIN_UID) {
+  if (!isAdmin()) {
     els["car-form-error"].textContent = "Нямате права за редактиране.";
     return;
   }
@@ -648,7 +653,7 @@ async function saveCar(event) {
 }
 
 async function deleteCar(car) {
-  if (currentUser?.uid !== ADMIN_UID) return;
+  if (!isAdmin()) return;
   const confirmed = window.confirm(`Изтриване на „${car.name}“? Действието ще премахне само записа за колата.`);
   if (!confirmed) return;
   try {
@@ -780,7 +785,7 @@ function renderImportPreview(plan) {
 }
 
 async function openImportPreview() {
-  if (currentUser?.uid !== ADMIN_UID || !db) return;
+  if (!isAdmin() || !db) return;
   els["import-error"].textContent = "";
   try {
     const current = await readRawCars();
@@ -795,7 +800,7 @@ async function openImportPreview() {
 
 async function confirmImport(event) {
   event.preventDefault();
-  if (currentUser?.uid !== ADMIN_UID || !db || !importState) return;
+  if (!isAdmin() || !db || !importState) return;
   const useProposed = new Set(
     [...els["import-form"].querySelectorAll("input[type=radio]:checked")]
       .filter((input) => input.value === "use")
@@ -879,7 +884,7 @@ function renderOrderReview(deliveryTermNotice = null) {
 
     const model = createReviewSelect(order.model, [["", "Не е посочено"], ["Basic", "Basic"], ["Comfort", "Comfort"], ["Premium", "Premium"]]);
     model.dataset.field = "model";
-    const color = createReviewSelect(order.color, [["", "Не е посочено"], ...COLORS.map(({ id, name: colorName }) => [id, colorName])]);
+    const color = createReviewSelect(order.color, [["", "Не е посочено"], ...DROPDOWN_COLORS.map(({ id, name: colorName }) => [id, colorName])]);
     color.dataset.field = "color";
     const vehicleFields = makeElement("div", "order-review-grid");
     vehicleFields.append(reviewField("Оборудване", model), reviewField("Цвят", color));
@@ -937,7 +942,7 @@ function renderOrderReview(deliveryTermNotice = null) {
 }
 
 async function postAdminRequest(path, body) {
-  if (currentUser?.uid !== ADMIN_UID) throw new Error("Нямате права за това действие.");
+  if (!isAdmin()) throw new Error("Нямате права за това действие.");
   const controller = new AbortController();
   let timeoutId;
   const request = async () => {
@@ -999,7 +1004,7 @@ function readReviewedOrders() {
 }
 
 async function extractOrders() {
-  if (ordersRequestInProgress || currentUser?.uid !== ADMIN_UID) return;
+  if (ordersRequestInProgress || !isAdmin()) return;
   const text = els["parse-orders-text"].value;
   els["parse-orders-status"].textContent = "";
   parsedOrders = [];
@@ -1027,7 +1032,7 @@ async function extractOrders() {
 }
 
 async function saveParsedOrders() {
-  if (ordersRequestInProgress || currentUser?.uid !== ADMIN_UID || !parsedOrders.length) return;
+  if (ordersRequestInProgress || !isAdmin() || !parsedOrders.length) return;
   const form = els["order-review"];
   const invalidField = form.querySelector(":invalid");
   if (invalidField) {
@@ -1094,17 +1099,17 @@ function connectFirebase() {
     });
     onAuthStateChanged(auth, (user) => {
       currentUser = user;
-      els["login-button"].classList.toggle("hidden", user?.uid === ADMIN_UID);
-      els["logout-button"].classList.toggle("hidden", user?.uid !== ADMIN_UID);
-      if (user && user.uid !== ADMIN_UID) {
+      els["login-button"].classList.toggle("hidden", isAdmin(user));
+      els["logout-button"].classList.toggle("hidden", !isAdmin(user));
+      if (user && !isAdmin(user)) {
         showNotice("Влезли сте с акаунт без администраторски права. Данните остават само за четене.", "warning");
-      } else if (user?.uid === ADMIN_UID) {
+      } else if (isAdmin(user)) {
         showNotice("Влезли сте като администратор.", "success", 4000);
       }
       render();
     });
-    if (ADMIN_UID === "REPLACE_WITH_ADMIN_UID") {
-      showNotice("Публичният тракер може да се зареди, но за администраторски функции трябва да зададете UID в public/firebase-config.js и същия UID във firestore.rules.", "warning");
+    if (!ADMIN_UIDS.length || ADMIN_UIDS.includes("REPLACE_WITH_ADMIN_UID")) {
+      showNotice("Публичният тракер може да се зареди, но за администраторски функции трябва да зададете UID адресите в public/firebase-config.js, functions/index.js и firestore.rules.", "warning");
     }
   } catch (error) {
     setConnection("Грешка при настройка", "error");
@@ -1139,7 +1144,7 @@ function installEvents() {
     const form = new FormData(els["login-form"]);
     try {
       const credential = await signInWithEmailAndPassword(auth, String(form.get("email")).trim(), String(form.get("password")));
-      if (credential.user.uid !== ADMIN_UID) {
+      if (!isAdmin(credential.user)) {
         await signOut(auth);
         throw new Error("Този акаунт не е в предварително зададения администраторски списък.");
       }

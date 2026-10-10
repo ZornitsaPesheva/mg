@@ -11,7 +11,10 @@ import { todayInSofia, validateOrdersForSaving, validateParsedOrders } from "./d
 
 dotenv.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), "../.env") });
 
-const ADMIN_UID = "Bsrl0QKJl8OGpJBDJzrN4jIC3ay2";
+const ADMIN_UIDS = [
+  "Bsrl0QKJl8OGpJBDJzrN4jIC3ay2",
+  "HqNbE0a1pjVtkvNVz7YX57L8sfB3",
+];
 const MODEL = "gemini-3.5-flash-lite";
 const MAX_TEXT_LENGTH = 12_000;
 const MAX_BODY_LENGTH = 16_384;
@@ -88,7 +91,7 @@ async function requireAdmin(req) {
   } catch {
     throw new HttpError(401, "Сесията е невалидна или е изтекла. Влезте отново.");
   }
-  if (decoded.uid !== ADMIN_UID) throw new HttpError(403, "Нямате права за това действие.");
+  if (!ADMIN_UIDS.includes(decoded.uid)) throw new HttpError(403, "Нямате права за това действие.");
 }
 
 function requireJsonBody(req) {

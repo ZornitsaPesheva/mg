@@ -7,9 +7,11 @@ service cloud.firestore {
       allow get: if true;
       allow list: if false;
 
-      // Replace the UID below with the administrator's Firebase Auth UID.
       allow create, update: if request.auth != null
-        && request.auth.uid == 'Bsrl0QKJl8OGpJBDJzrN4jIC3ay2'
+        && request.auth.uid in [
+          'Bsrl0QKJl8OGpJBDJzrN4jIC3ay2',
+          'HqNbE0a1pjVtkvNVz7YX57L8sfB3'
+        ]
         && request.resource.data.keys().hasAll(['cars'])
         && request.resource.data.keys().hasOnly(['cars'])
         && request.resource.data.cars is list;
