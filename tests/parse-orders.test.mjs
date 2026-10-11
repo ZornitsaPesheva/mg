@@ -11,6 +11,7 @@ import {
 test("normalizes only supported model and color names", () => {
   assert.equal(normalizeModel("Comfort"), "Comfort");
   assert.equal(normalizeModel("премиум"), "Premium");
+  assert.equal(normalizeModel("Basic"), null);
   assert.equal(normalizeModel("Luxury"), null);
   assert.equal(normalizeColor("Stone Green"), "stone-green");
   assert.equal(normalizeColor("червен"), "red");
@@ -99,6 +100,7 @@ test("saving requires a name and exact order date, creates server IDs, and drops
   assert.equal(order.note, "Батерия 54 kWh");
   assert.equal("deliveryTerm" in order, false);
   assert.throws(() => validateOrdersForSaving([{ ...order, orderDate: null }], "2026-10-08"));
+  assert.throws(() => validateOrdersForSaving([{ ...order, model: "Basic" }], "2026-10-08"));
 });
 
 test("uses Sofia's calendar date", () => {

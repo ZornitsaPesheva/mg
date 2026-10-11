@@ -33,14 +33,14 @@ const COLORS = [
   { id: "black", name: "Черен — неуточнен нюанс", hex: "#252729" },
 ];
 const DROPDOWN_COLORS = COLORS.filter(({ id }) => !["red", "white", "black"].includes(id));
-const MODELS = new Set(["Basic", "Comfort", "Premium"]);
+const MODELS = new Set(["Comfort", "Premium"]);
 const STATUSES = new Set(["waiting", "delivered", "switched"]);
 const STATUS_LABELS = { waiting: "Очаква доставка", delivered: "Доставена", switched: "Преминава към друг модел" };
 const TRACKER_REF_PATH = ["tracker", "data"];
 const ADMIN_REQUEST_TIMEOUT_MS = 35_000;
 const axisStorageKey = "mg4-urban-timeline-start";
 const els = Object.fromEntries([
-  "connection-pill", "connection-text", "login-button", "logout-button", "admin-actions", "seed-button", "add-car-button", "import-dialog", "import-form", "import-preview", "import-error", "import-confirm",
+  "connection-pill", "connection-text", "login-button", "logout-button", "admin-actions", "add-car-button", "import-dialog", "import-form", "import-preview", "import-error", "import-confirm",
   "order-import-panel", "parse-orders-text", "parse-orders-button", "parse-orders-status", "order-review",
   "today-label", "visible-count", "count-label", "model-filter", "color-filter", "clear-filters", "notice", "empty-state",
   "empty-title", "empty-description", "timeline-wrap", "timeline", "selected-detail", "axis-start", "footer-year",
@@ -406,7 +406,6 @@ function render() {
   const visible = filteredCars();
   updateCount(visible.length);
   els["admin-actions"].classList.toggle("hidden", !isAdmin());
-  els["seed-button"].classList.toggle("hidden", !isAdmin());
   els["order-import-panel"].classList.toggle("hidden", !isAdmin());
   els["empty-state"].classList.toggle("hidden", visible.length > 0);
   els["timeline-wrap"].classList.toggle("hidden", visible.length === 0);
@@ -882,7 +881,7 @@ function renderOrderReview(deliveryTermNotice = null) {
     name.dataset.field = "name";
     card.append(reviewField("Име или псевдоним", name));
 
-    const model = createReviewSelect(order.model, [["", "Не е посочено"], ["Basic", "Basic"], ["Comfort", "Comfort"], ["Premium", "Premium"]]);
+    const model = createReviewSelect(order.model, [["", "Не е посочено"], ["Comfort", "Comfort"], ["Premium", "Premium"]]);
     model.dataset.field = "model";
     const color = createReviewSelect(order.color, [["", "Не е посочено"], ...DROPDOWN_COLORS.map(({ id, name: colorName }) => [id, colorName])]);
     color.dataset.field = "color";
@@ -1156,7 +1155,6 @@ function installEvents() {
   });
   els["add-car-button"].addEventListener("click", () => openCarForm());
   els["parse-orders-button"].addEventListener("click", extractOrders);
-  els["seed-button"].addEventListener("click", openImportPreview);
   els["import-form"].addEventListener("submit", confirmImport);
   els["car-form"].addEventListener("submit", saveCar);
   document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => closeDialog(document.getElementById(button.dataset.close))));

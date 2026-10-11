@@ -1,4 +1,4 @@
-export const MODELS = ["Basic", "Comfort", "Premium"];
+export const MODELS = ["Comfort", "Premium"];
 export const COLORS = [
   "dover-white",
   "pebble-black",
@@ -16,7 +16,6 @@ export const COLORS = [
 export const STATUSES = ["waiting", "delivered", "switched"];
 
 const MODEL_ALIASES = new Map([
-  ["basic", "Basic"],
   ["comfort", "Comfort"],
   ["комфорт", "Comfort"],
   ["premium", "Premium"],
