@@ -9,8 +9,11 @@ import {
 } from "../functions/domain.js";
 
 test("normalizes only supported model and color names", () => {
+  assert.equal(normalizeModel("43 kWh Comfort"), "43 kWh Comfort");
+  assert.equal(normalizeModel("54 kWh Comfort"), "54 kWh Comfort");
+  assert.equal(normalizeModel("54 kWh Premium"), "54 kWh Premium");
+  assert.equal(normalizeModel("премиум"), "54 kWh Premium");
   assert.equal(normalizeModel("Comfort"), "Comfort");
-  assert.equal(normalizeModel("премиум"), "Premium");
   assert.equal(normalizeModel("Basic"), null);
   assert.equal(normalizeModel("Luxury"), null);
   assert.equal(normalizeColor("Stone Green"), "stone-green");
@@ -21,7 +24,7 @@ test("normalizes only supported model and color names", () => {
 test("keeps unknown facts null and separates delivery terms from delivery dates", () => {
   const [order] = validateParsedOrders([{
     name: "Мария",
-    model: "Comfort",
+    model: "54 kWh Comfort",
     color: "red",
     orderDate: "2026-06-20",
     deliveryDate: null,
@@ -39,7 +42,7 @@ test("handles several extracted comments and leaves missing facts null", () => {
   const orders = validateParsedOrders([
     {
       name: "Иван",
-      model: "Comfort",
+      model: "43 kWh Comfort",
       color: "Stone Green",
       orderDate: "2026-06-20",
       deliveryDate: null,
@@ -86,7 +89,7 @@ test("rejects impossible dates, future dates, and delivery before order", () => 
 test("saving requires a name and exact order date, creates server IDs, and drops unsupported fields", () => {
   const [order] = validateOrdersForSaving([{
     name: " Иван   Петров ",
-    model: "Premium",
+    model: "54 kWh Premium",
     color: "stone-green",
     orderDate: "2026-06-20",
     deliveryDate: null,
@@ -100,7 +103,7 @@ test("saving requires a name and exact order date, creates server IDs, and drops
   assert.equal(order.note, "Батерия 54 kWh");
   assert.equal("deliveryTerm" in order, false);
   assert.throws(() => validateOrdersForSaving([{ ...order, orderDate: null }], "2026-10-08"));
-  assert.throws(() => validateOrdersForSaving([{ ...order, model: "Basic" }], "2026-10-08"));
+  assert.throws(() => validateOrdersForSaving([{ ...order, model: "Premium" }], "2026-10-08"));
 });
 
 test("uses Sofia's calendar date", () => {

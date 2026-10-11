@@ -1,4 +1,4 @@
-export const MODELS = ["Comfort", "Premium"];
+export const MODELS = ["43 kWh Comfort", "54 kWh Comfort", "54 kWh Premium", "Comfort"];
 export const COLORS = [
   "dover-white",
   "pebble-black",
@@ -16,10 +16,13 @@ export const COLORS = [
 export const STATUSES = ["waiting", "delivered", "switched"];
 
 const MODEL_ALIASES = new Map([
+  ["43 kwh comfort", "43 kWh Comfort"],
+  ["54 kwh comfort", "54 kWh Comfort"],
+  ["54 kwh premium", "54 kWh Premium"],
   ["comfort", "Comfort"],
   ["комфорт", "Comfort"],
-  ["premium", "Premium"],
-  ["премиум", "Premium"],
+  ["premium", "54 kWh Premium"],
+  ["премиум", "54 kWh Premium"],
 ]);
 const COLOR_ALIASES = new Map([
   ["dover white", "dover-white"],

@@ -33,7 +33,7 @@ const COLORS = [
   { id: "black", name: "Черен — неуточнен нюанс", hex: "#252729" },
 ];
 const DROPDOWN_COLORS = COLORS.filter(({ id }) => !["red", "white", "black"].includes(id));
-const MODELS = new Set(["Comfort", "Premium"]);
+const MODELS = new Set(["43 kWh Comfort", "54 kWh Comfort", "54 kWh Premium", "Comfort"]);
 const STATUSES = new Set(["waiting", "delivered", "switched"]);
 const STATUS_LABELS = { waiting: "Очаква доставка", delivered: "Доставена", switched: "Преминава към друг модел" };
 const TRACKER_REF_PATH = ["tracker", "data"];
@@ -188,7 +188,7 @@ function safeCars(value) {
     .map((car) => ({
       id: car.id,
       name: car.name,
-      model: MODELS.has(car.model) ? car.model : null,
+      model: car.model === "Premium" ? "54 kWh Premium" : MODELS.has(car.model) ? car.model : null,
       color: COLORS.some(({ id }) => id === car.color) ? car.color : null,
       orderDate: isValidISODate(car.orderDate) ? car.orderDate : null,
       deliveryDate: isValidISODate(car.deliveryDate) ? car.deliveryDate : null,
@@ -514,6 +514,9 @@ function openCarForm(car = null) {
     ? "Оставете празно, за да запазите приблизителната дата, или въведете точна дата."
     : "Задължителна за нов запис.";
   const form = els["car-form"];
+  if (car?.model === "Comfort" && ![...form.elements.model.options].some((option) => option.value === car.model)) {
+    form.elements.model.add(new Option("Comfort (капацитетът не е указан)", car.model));
+  }
   form.elements.id.value = car?.id || "";
   form.elements.name.value = car?.name || "";
   form.elements.model.value = car?.model || "";
@@ -881,7 +884,14 @@ function renderOrderReview(deliveryTermNotice = null) {
     name.dataset.field = "name";
     card.append(reviewField("Име или псевдоним", name));
 
-    const model = createReviewSelect(order.model, [["", "Не е посочено"], ["Comfort", "Comfort"], ["Premium", "Premium"]]);
+    const modelOptions = [
+      ["", "Не е посочено"],
+      ["43 kWh Comfort", "43 kWh Comfort"],
+      ["54 kWh Comfort", "54 kWh Comfort"],
+      ["54 kWh Premium", "54 kWh Premium"],
+    ];
+    if (order.model === "Comfort") modelOptions.push(["Comfort", "Comfort (капацитетът не е указан)"]);
+    const model = createReviewSelect(order.model, modelOptions);
     model.dataset.field = "model";
     const color = createReviewSelect(order.color, [["", "Не е посочено"], ...DROPDOWN_COLORS.map(({ id, name: colorName }) => [id, colorName])]);
     color.dataset.field = "color";
