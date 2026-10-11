@@ -34,6 +34,7 @@ const COLORS = [
 ];
 const DROPDOWN_COLORS = COLORS.filter(({ id }) => !["red", "white", "black"].includes(id));
 const MODELS = new Set(["43 kWh Comfort", "54 kWh Comfort", "54 kWh Premium", "Comfort"]);
+const DEALERS = ["София", "Пловдив", "Варна", "Бургас", "Стара Загора", "Сливен", "Хасково", "Габрово", "Велико Търново", "Пазарджик"];
 const STATUSES = new Set(["waiting", "delivered", "switched"]);
 const STATUS_LABELS = { waiting: "Очаква доставка", delivered: "Доставена", switched: "Преминава към друг модел" };
 const TRACKER_REF_PATH = ["tracker", "data"];
@@ -42,7 +43,7 @@ const axisStorageKey = "mg4-urban-timeline-start";
 const els = Object.fromEntries([
   "connection-pill", "connection-text", "login-button", "logout-button", "admin-actions", "add-car-button", "import-dialog", "import-form", "import-preview", "import-error", "import-confirm",
   "order-import-panel", "parse-orders-text", "parse-orders-button", "parse-orders-status", "order-review",
-  "today-label", "visible-count", "count-label", "model-filter", "color-filter", "clear-filters", "notice", "empty-state",
+  "today-label", "visible-count", "count-label", "model-filter", "dealer-filter", "color-filter", "clear-filters", "notice", "empty-state",
   "empty-title", "empty-description", "timeline-wrap", "timeline", "selected-detail", "axis-start", "footer-year",
   "login-dialog", "login-form", "login-error", "car-dialog", "car-form", "car-form-title", "car-color-select",
   "order-date-help", "approximate-preserve", "car-form-error", "zoom-out", "zoom-in", "fit-period",
@@ -189,6 +190,7 @@ function safeCars(value) {
       id: car.id,
       name: car.name,
       model: car.model === "Premium" ? "54 kWh Premium" : MODELS.has(car.model) ? car.model : null,
+      dealer: DEALERS.includes(car.dealer) ? car.dealer : null,
       color: COLORS.some(({ id }) => id === car.color) ? car.color : null,
       orderDate: isValidISODate(car.orderDate) ? car.orderDate : null,
       deliveryDate: isValidISODate(car.deliveryDate) ? car.deliveryDate : null,
@@ -211,11 +213,13 @@ function safeCars(value) {
 
 function filteredCars() {
   const modelValue = els["model-filter"].value;
+  const dealerValue = els["dealer-filter"].value;
   const colorValue = els["color-filter"].value;
   return cars.filter((car) => {
     const modelMatches = modelValue === "all" || (modelValue === "none" ? !car.model : car.model === modelValue);
+    const dealerMatches = dealerValue === "all" || (dealerValue === "none" ? !car.dealer : car.dealer === dealerValue);
     const colorMatches = colorValue === "all" || (colorValue === "none" ? !car.color : car.color === colorValue);
-    return modelMatches && colorMatches;
+    return modelMatches && dealerMatches && colorMatches;
   }).sort((left, right) => orderSortDate(left).localeCompare(orderSortDate(right)) || left.name.localeCompare(right.name, "bg"));
 }
 
@@ -227,9 +231,10 @@ function updateCount(count) {
 function rowDetailText(car) {
   const color = getColor(car.color)?.name || "Не е посочено";
   const model = car.model || "Не е посочено";
+  const dealer = car.dealer || "Не е посочен";
   const orderText = displayedDate(car);
   const note = car.note ? ` Бележка: ${car.note.replace(/\.$/, "")}.` : "";
-  return `${car.name}. Оборудване: ${model}. Цвят: ${color}. Поръчка: ${orderText}. Доставка: ${displayedDelivery(car)}. ${durationText(car, today)}.${note}`;
+  return `${car.name}. Оборудване: ${model}. Дилър: ${dealer}. Цвят: ${color}. Поръчка: ${orderText}. Доставка: ${displayedDelivery(car)}. ${durationText(car, today)}.${note}`;
 }
 
 function showSelectedDetail(car) {
@@ -520,6 +525,7 @@ function openCarForm(car = null) {
   form.elements.id.value = car?.id || "";
   form.elements.name.value = car?.name || "";
   form.elements.model.value = car?.model || "";
+  form.elements.dealer.value = car?.dealer || "";
   populateFormColors(car?.color || "");
   form.elements.orderDate.value = car?.orderDate || "";
   form.elements.deliveryDate.value = car?.deliveryDate || "";
@@ -536,6 +542,7 @@ function openCarForm(car = null) {
 function validateCarForm(formData, existing) {
   const name = String(formData.get("name") || "").trim().replace(/\s+/g, " ");
   const modelValue = String(formData.get("model") || "");
+  const dealerValue = String(formData.get("dealer") || "");
   const colorValue = String(formData.get("color") || "");
   const orderDateValue = String(formData.get("orderDate") || "");
   const deliveryDateValue = String(formData.get("deliveryDate") || "");
@@ -546,6 +553,7 @@ function validateCarForm(formData, existing) {
   if (!name) throw new Error("Въведете име или псевдоним.");
   if (name.length > 80) throw new Error("Името може да е най-много 80 знака.");
   if (modelValue && !MODELS.has(modelValue)) throw new Error("Изберете валидно ниво на оборудване.");
+  if (dealerValue && !DEALERS.includes(dealerValue)) throw new Error("Изберете валиден дилър.");
   if (colorValue && !COLORS.some(({ id }) => id === colorValue)) throw new Error("Изберете валиден цвят.");
 
   let orderDate;
@@ -594,6 +602,7 @@ function validateCarForm(formData, existing) {
     id: existing?.id || crypto.randomUUID(),
     name,
     model: modelValue || null,
+    dealer: dealerValue || null,
     color: colorValue || null,
     orderDate,
     deliveryDate,
@@ -893,10 +902,12 @@ function renderOrderReview(deliveryTermNotice = null) {
     if (order.model === "Comfort") modelOptions.push(["Comfort", "Comfort (капацитетът не е указан)"]);
     const model = createReviewSelect(order.model, modelOptions);
     model.dataset.field = "model";
+    const dealer = createReviewSelect(order.dealer, [["", "Не е посочен"], ...DEALERS.map((name) => [name, name])]);
+    dealer.dataset.field = "dealer";
     const color = createReviewSelect(order.color, [["", "Не е посочено"], ...DROPDOWN_COLORS.map(({ id, name: colorName }) => [id, colorName])]);
     color.dataset.field = "color";
     const vehicleFields = makeElement("div", "order-review-grid");
-    vehicleFields.append(reviewField("Оборудване", model), reviewField("Цвят", color));
+    vehicleFields.append(reviewField("Оборудване", model), reviewField("Дилър", dealer), reviewField("Цвят", color));
     card.append(vehicleFields);
 
     const orderDate = document.createElement("input");
@@ -1128,9 +1139,11 @@ function connectFirebase() {
 
 function installEvents() {
   els["model-filter"].addEventListener("change", render);
+  els["dealer-filter"].addEventListener("change", render);
   els["color-filter"].addEventListener("change", render);
   els["clear-filters"].addEventListener("click", () => {
     els["model-filter"].value = "all";
+    els["dealer-filter"].value = "all";
     els["color-filter"].value = "all";
     render();
   });

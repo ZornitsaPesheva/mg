@@ -53,6 +53,7 @@
           <div class="toolbar">
             <div class="filters" aria-label="Филтри">
               <label class="filter-control"><span>Оборудване</span><select id="model-filter"><option value="all">Всички</option><option value="43 kWh Comfort">43 kWh Comfort</option><option value="54 kWh Comfort">54 kWh Comfort</option><option value="54 kWh Premium">54 kWh Premium</option><option value="none">Не е посочено</option></select></label>
+              <label class="filter-control"><span>Дилър</span><select id="dealer-filter"><option value="all">Всички дилъри</option><option value="София">София</option><option value="Пловдив">Пловдив</option><option value="Варна">Варна</option><option value="Бургас">Бургас</option><option value="Стара Загора">Стара Загора</option><option value="Сливен">Сливен</option><option value="Хасково">Хасково</option><option value="Габрово">Габрово</option><option value="Велико Търново">Велико Търново</option><option value="Пазарджик">Пазарджик</option><option value="none">Не е посочен</option></select></label>
               <label class="filter-control"><span>Цвят</span><select id="color-filter"><option value="all">Всички цветове</option></select></label>
               <button id="clear-filters" class="text-button" type="button">Изчисти филтрите</button>
             </div>
@@ -140,6 +141,7 @@
         <label class="form-field"><span>Име или псевдоним</span><input name="name" type="text" maxlength="80" autocomplete="off" required></label>
         <div class="form-grid">
           <label class="form-field"><span>Оборудване</span><select name="model"><option value="">Не е посочено</option><option value="43 kWh Comfort">43 kWh Comfort</option><option value="54 kWh Comfort">54 kWh Comfort</option><option value="54 kWh Premium">54 kWh Premium</option></select></label>
+          <label class="form-field"><span>Дилър</span><select name="dealer"><option value="">Не е посочен</option><option value="София">София</option><option value="Пловдив">Пловдив</option><option value="Варна">Варна</option><option value="Бургас">Бургас</option><option value="Стара Загора">Стара Загора</option><option value="Сливен">Сливен</option><option value="Хасково">Хасково</option><option value="Габрово">Габрово</option><option value="Велико Търново">Велико Търново</option><option value="Пазарджик">Пазарджик</select></label>
           <label class="form-field"><span>Цвят</span><select name="color" id="car-color-select"><option value="">Не е посочено</option></select></label>
         </div>
         <label class="form-field"><span>Дата на поръчката</span><input name="orderDate" type="date"><small id="order-date-help">Задължителна за нов запис.</small></label>

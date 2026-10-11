@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  normalizeDealer,
   normalizeColor,
   normalizeModel,
   todayInSofia,
@@ -16,6 +17,9 @@ test("normalizes only supported model and color names", () => {
   assert.equal(normalizeModel("Comfort"), "Comfort");
   assert.equal(normalizeModel("Basic"), null);
   assert.equal(normalizeModel("Luxury"), null);
+  assert.equal(normalizeDealer("София"), "София");
+  assert.equal(normalizeDealer("  велико   търново "), "Велико Търново");
+  assert.equal(normalizeDealer("Русе"), null);
   assert.equal(normalizeColor("Stone Green"), "stone-green");
   assert.equal(normalizeColor("червен"), "red");
   assert.equal(normalizeColor("зелен"), null);
@@ -25,6 +29,7 @@ test("keeps unknown facts null and separates delivery terms from delivery dates"
   const [order] = validateParsedOrders([{
     name: "Мария",
     model: "54 kWh Comfort",
+    dealer: "Варна",
     color: "red",
     orderDate: "2026-06-20",
     deliveryDate: null,
@@ -35,6 +40,7 @@ test("keeps unknown facts null and separates delivery terms from delivery dates"
 
   assert.equal(order.deliveryDate, null);
   assert.equal(order.deliveryTerm, "210 дни");
+  assert.equal(order.dealer, "Варна");
   assert.equal(order.color, "red");
 });
 
@@ -43,6 +49,7 @@ test("handles several extracted comments and leaves missing facts null", () => {
     {
       name: "Иван",
       model: "43 kWh Comfort",
+      dealer: "Пловдив",
       color: "Stone Green",
       orderDate: "2026-06-20",
       deliveryDate: null,
@@ -53,6 +60,7 @@ test("handles several extracted comments and leaves missing facts null", () => {
     {
       name: "Не е посочено",
       model: null,
+      dealer: null,
       color: null,
       orderDate: null,
       deliveryDate: null,
@@ -66,6 +74,8 @@ test("handles several extracted comments and leaves missing facts null", () => {
   assert.equal(orders[0].deliveryDate, null);
   assert.equal(orders[0].deliveryTerm, "210 дни");
   assert.equal(orders[1].model, null);
+  assert.equal(orders[0].dealer, "Пловдив");
+  assert.equal(orders[1].dealer, null);
   assert.equal(orders[1].color, null);
   assert.equal(orders[1].orderDate, null);
 });
@@ -90,6 +100,7 @@ test("saving requires a name and exact order date, creates server IDs, and drops
   const [order] = validateOrdersForSaving([{
     name: " Иван   Петров ",
     model: "54 kWh Premium",
+    dealer: "София",
     color: "stone-green",
     orderDate: "2026-06-20",
     deliveryDate: null,
@@ -100,10 +111,12 @@ test("saving requires a name and exact order date, creates server IDs, and drops
 
   assert.match(order.id, /^[\da-f-]{36}$/i);
   assert.equal(order.name, "Иван Петров");
+  assert.equal(order.dealer, "София");
   assert.equal(order.note, "Батерия 54 kWh");
   assert.equal("deliveryTerm" in order, false);
   assert.throws(() => validateOrdersForSaving([{ ...order, orderDate: null }], "2026-10-08"));
   assert.throws(() => validateOrdersForSaving([{ ...order, model: "Premium" }], "2026-10-08"));
+  assert.throws(() => validateOrdersForSaving([{ ...order, dealer: "Русе" }], "2026-10-08"));
 });
 
 test("uses Sofia's calendar date", () => {

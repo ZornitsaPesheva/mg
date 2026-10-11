@@ -1,4 +1,16 @@
 export const MODELS = ["43 kWh Comfort", "54 kWh Comfort", "54 kWh Premium", "Comfort"];
+export const DEALERS = [
+  "София",
+  "Пловдив",
+  "Варна",
+  "Бургас",
+  "Стара Загора",
+  "Сливен",
+  "Хасково",
+  "Габрово",
+  "Велико Търново",
+  "Пазарджик",
+];
 export const COLORS = [
   "dover-white",
   "pebble-black",
@@ -66,6 +78,12 @@ export function normalizeModel(value) {
   return MODEL_ALIASES.get(key) || null;
 }
 
+export function normalizeDealer(value) {
+  if (typeof value !== "string") return null;
+  const key = value.trim().replace(/\s+/g, " ").toLocaleLowerCase("bg");
+  return DEALERS.find((dealer) => dealer.toLocaleLowerCase("bg") === key) || null;
+}
+
 export function normalizeColor(value) {
   if (typeof value !== "string") return null;
   const key = normalized(value);
@@ -122,6 +140,7 @@ export function validateParsedOrders(value, today = todayInSofia()) {
     }
 
     const rawModel = optionalText(entry.model, 80, "оборудване", index);
+    const rawDealer = optionalText(entry.dealer, 80, "дилър", index);
     const rawColor = optionalText(entry.color, 80, "цвят", index);
     const rawStatus = optionalText(entry.status, 30, "статус", index);
     const status = rawStatus && STATUSES.includes(rawStatus) ? rawStatus : null;
@@ -130,6 +149,7 @@ export function validateParsedOrders(value, today = todayInSofia()) {
     return {
       name,
       model: normalizeModel(rawModel),
+      dealer: normalizeDealer(rawDealer),
       color: normalizeColor(rawColor),
       orderDate,
       deliveryDate,
@@ -156,6 +176,10 @@ export function validateOrdersForSaving(value, today = todayInSofia()) {
     if (model !== null && !MODELS.includes(model)) {
       throw new Error(`Запис ${index + 1}: изберете валидно ниво на оборудване.`);
     }
+    const dealer = entry.dealer === null || entry.dealer === "" ? null : normalizeDealer(entry.dealer);
+    if (entry.dealer !== null && entry.dealer !== "" && !dealer) {
+      throw new Error(`Запис ${index + 1}: изберете валиден дилър.`);
+    }
     const color = entry.color === null || entry.color === "" ? null : entry.color;
     if (color !== null && !COLORS.includes(color)) throw new Error(`Запис ${index + 1}: изберете валиден цвят.`);
 
@@ -180,6 +204,7 @@ export function validateOrdersForSaving(value, today = todayInSofia()) {
       id: crypto.randomUUID(),
       name,
       model,
+      dealer,
       color,
       orderDate,
       deliveryDate,
