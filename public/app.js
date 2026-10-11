@@ -17,6 +17,7 @@ import {
 import { firebaseConfig, ADMIN_UIDS, TIMELINE_DEFAULT_START } from "./firebase-config.js";
 import { seedCars, seedUpdates } from "./seed-data.js";
 import { daysBetween, formatISODate, getSofiaDate, isValidISODate, monthName } from "./date-utils.js";
+import { prepareOrderUpdates } from "./order-update-utils.js";
 
 const COLORS = [
   { id: "dover-white", name: "Dover White", hex: "#F3F1EA" },
@@ -43,6 +44,7 @@ const axisStorageKey = "mg4-urban-timeline-start";
 const els = Object.fromEntries([
   "connection-pill", "connection-text", "login-button", "logout-button", "admin-actions", "add-car-button", "import-dialog", "import-form", "import-preview", "import-error", "import-confirm",
   "order-import-panel", "parse-orders-text", "parse-orders-button", "parse-orders-status", "order-review",
+  "update-orders-button", "update-orders-status", "update-review",
   "today-label", "visible-count", "count-label", "model-filter", "dealer-filter", "color-filter", "clear-filters", "notice", "empty-state",
   "empty-title", "empty-description", "timeline-wrap", "timeline", "selected-detail", "axis-start", "footer-year",
   "login-dialog", "login-form", "login-error", "car-dialog", "car-form", "car-form-title", "car-color-select",
@@ -63,6 +65,8 @@ let timelineZoom = 1;
 let fitFullPeriod = true;
 let parsedOrders = [];
 let ordersRequestInProgress = false;
+let parsedOrderUpdates = [];
+let updatesRequestInProgress = false;
 
 function isAdmin(user = currentUser) {
   return Boolean(user && ADMIN_UIDS.includes(user.uid));
@@ -196,6 +200,7 @@ function safeCars(value) {
       deliveryDate: isValidISODate(car.deliveryDate) ? car.deliveryDate : null,
       ...(STATUSES.has(car.status) ? { status: car.status } : {}),
       ...(typeof car.note === "string" && car.note.trim() ? { note: car.note.trim() } : {}),
+      ...(typeof car.deliveryTerm === "string" && car.deliveryTerm.trim() ? { deliveryTerm: car.deliveryTerm.trim() } : {}),
       ...(car.deliveryDateApproximate === true ? {
         deliveryDateApproximate: true,
         deliveryDateNote: typeof car.deliveryDateNote === "string" ? car.deliveryDateNote : "Приблизителна дата",
@@ -234,7 +239,8 @@ function rowDetailText(car) {
   const dealer = car.dealer || "Не е посочен";
   const orderText = displayedDate(car);
   const note = car.note ? ` Бележка: ${car.note.replace(/\.$/, "")}.` : "";
-  return `${car.name}. Оборудване: ${model}. Дилър: ${dealer}. Цвят: ${color}. Поръчка: ${orderText}. Доставка: ${displayedDelivery(car)}. ${durationText(car, today)}.${note}`;
+  const deliveryTerm = car.deliveryTerm ? ` Очакван срок: ${car.deliveryTerm}.` : "";
+  return `${car.name}. Оборудване: ${model}. Дилър: ${dealer}. Цвят: ${color}. Поръчка: ${orderText}. Доставка: ${displayedDelivery(car)}. ${durationText(car, today)}.${deliveryTerm}${note}`;
 }
 
 function showSelectedDetail(car) {
@@ -530,6 +536,7 @@ function openCarForm(car = null) {
   form.elements.orderDate.value = car?.orderDate || "";
   form.elements.deliveryDate.value = car?.deliveryDate || "";
   form.elements.status.value = car?.status || "";
+  form.elements.deliveryTerm.value = car?.deliveryTerm || "";
   form.elements.note.value = car?.note || "";
   if (car?.orderDateApproximate) {
     els["approximate-preserve"].textContent = `Съществуваща приблизителна дата: „${car.orderDateNote}“ (${formatISODate(car.orderDateRangeStart)} – ${formatISODate(car.orderDateRangeEnd)}). Ако оставите датата на поръчката празна, този диапазон ще бъде запазен.`;
@@ -547,9 +554,11 @@ function validateCarForm(formData, existing) {
   const orderDateValue = String(formData.get("orderDate") || "");
   const deliveryDateValue = String(formData.get("deliveryDate") || "");
   const statusValue = String(formData.get("status") || "");
+  const deliveryTerm = String(formData.get("deliveryTerm") || "").trim().replace(/\s+/g, " ");
   const note = String(formData.get("note") || "").trim().replace(/\s+/g, " ");
   if (statusValue && !STATUSES.has(statusValue)) throw new Error("Изберете валиден статус.");
-  if (note.length > 300) throw new Error("Бележката може да е най-много 300 знака.");
+  if (note.length > 1000) throw new Error("Бележката може да е най-много 1000 знака.");
+  if (deliveryTerm.length > 120) throw new Error("Очакваният срок може да е най-много 120 знака.");
   if (!name) throw new Error("Въведете име или псевдоним.");
   if (name.length > 80) throw new Error("Името може да е най-много 80 знака.");
   if (modelValue && !MODELS.has(modelValue)) throw new Error("Изберете валидно ниво на оборудване.");
@@ -607,6 +616,7 @@ function validateCarForm(formData, existing) {
     orderDate,
     deliveryDate,
     ...(statusValue ? { status: statusValue } : {}),
+    ...(deliveryTerm ? { deliveryTerm } : {}),
     ...(note ? { note } : {}),
     ...deliveryApproximateFields,
     ...approximateFields,
@@ -680,7 +690,8 @@ async function deleteCar(car) {
 }
 
 const FIELD_LABELS = {
-  name: "Име", model: "Оборудване", color: "Цвят", orderDate: "Дата на поръчката", deliveryDate: "Дата на доставка",
+  name: "Име", model: "Оборудване", dealer: "Дилър", color: "Цвят", orderDate: "Дата на поръчката", deliveryDate: "Дата на доставка",
+  deliveryTerm: "Очакван срок за доставка",
   status: "Статус", note: "Бележка", orderDateApproximate: "Приблизителна поръчка", orderDateNote: "Бележка за приблизителна поръчка",
   orderDateRangeStart: "Начало на диапазон на поръчката", orderDateRangeEnd: "Край на диапазон на поръчката",
   deliveryDateApproximate: "Приблизителна доставка", deliveryDateNote: "Бележка за приблизителна доставка",
@@ -873,14 +884,13 @@ function createReviewSelect(value, options) {
   return select;
 }
 
-function renderOrderReview(deliveryTermNotice = null) {
+function renderOrderReview() {
   const container = els["order-review"];
   container.replaceChildren();
   container.classList.toggle("hidden", !parsedOrders.length);
   if (!parsedOrders.length) return;
 
   container.append(makeElement("h3", "import-heading", "Преглед и редакция"));
-  if (deliveryTermNotice) container.append(makeElement("p", "delivery-term-notice", deliveryTermNotice));
 
   parsedOrders.forEach((order, index) => {
     const card = makeElement("fieldset", "order-review-card");
@@ -934,20 +944,23 @@ function renderOrderReview(deliveryTermNotice = null) {
 
     const note = document.createElement("textarea");
     note.rows = 2;
-    note.maxLength = 300;
+    note.maxLength = 1000;
     note.value = order.note || "";
     note.dataset.field = "note";
     card.append(reviewField("Бележка", note));
 
-    if (order.deliveryTerm) {
-      card.append(makeElement("p", "delivery-term-notice", `Посочен срок за доставка: ${order.deliveryTerm}. Той не се записва, защото приложението няма отделно поле за срок.`));
-    }
+    const deliveryTerm = document.createElement("input");
+    deliveryTerm.type = "text";
+    deliveryTerm.maxLength = 120;
+    deliveryTerm.value = order.deliveryTerm || "";
+    deliveryTerm.dataset.field = "deliveryTerm";
+    card.append(reviewField("Очакван срок за доставка", deliveryTerm));
 
     const remove = makeElement("button", "text-button order-remove-button", "Премахни записа");
     remove.type = "button";
     remove.addEventListener("click", () => {
       parsedOrders.splice(index, 1);
-      renderOrderReview(deliveryTermNotice);
+      renderOrderReview();
       if (!parsedOrders.length) els["parse-orders-status"].textContent = "Всички извлечени записи са премахнати.";
     });
     card.append(remove);
@@ -1023,6 +1036,153 @@ function readReviewedOrders() {
   });
 }
 
+function updateValueLabel(field, value) {
+  if (value === null || value === undefined || value === "") return "—";
+  if (field === "orderDate" || field === "deliveryDate") return formatISODate(value);
+  if (field === "color") return getColor(value)?.name || String(value);
+  if (field === "status") return STATUS_LABELS[value] || String(value);
+  return String(value);
+}
+
+function renderOrderUpdateReview() {
+  const container = els["update-review"];
+  container.replaceChildren();
+  container.classList.toggle("hidden", !parsedOrderUpdates.length);
+  if (!parsedOrderUpdates.length) return;
+
+  const counts = parsedOrderUpdates.reduce((total, item) => {
+    total[item.match] = (total[item.match] || 0) + 1;
+    return total;
+  }, {});
+  container.append(makeElement(
+    "p",
+    "import-summary",
+    `Съвпадения: ${counts.matched || 0} · Без еднозначно съвпадение: ${(counts.unmatched || 0) + (counts.ambiguous || 0)}`,
+  ));
+
+  parsedOrderUpdates.forEach((item, index) => {
+    const card = makeElement("fieldset", "order-review-card");
+    card.append(makeElement("legend", "", item.order.name || `Ред ${index + 1}`));
+    if (item.match !== "matched") {
+      card.append(makeElement("p", "delivery-term-notice", item.match === "ambiguous"
+        ? "Името съвпада с повече от един запис или се повтаря в списъка. Няма да бъде обновен автоматично."
+        : "Не е намерен съществуващ запис с това пълно име. Няма да бъде добавен нов запис."));
+      container.append(card);
+      return;
+    }
+
+    card.append(makeElement("p", "", `Съвпада с: ${item.current.name}`));
+    if (!item.changes.length) {
+      card.append(makeElement("p", "", "Няма различия в извлечените полета."));
+      container.append(card);
+      return;
+    }
+
+    item.changes.forEach(({ field, from, to, blockedReason }) => {
+      const label = makeElement("label", "import-choice");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = !blockedReason;
+      checkbox.disabled = Boolean(blockedReason) || updatesRequestInProgress;
+      checkbox.dataset.updateIndex = String(index);
+      checkbox.dataset.field = field;
+      const text = blockedReason
+        ? `${FIELD_LABELS[field] || field}: ${updateValueLabel(field, from)} → ${updateValueLabel(field, to)} (${blockedReason})`
+        : `${FIELD_LABELS[field] || field}: ${updateValueLabel(field, from)} → ${updateValueLabel(field, to)}`;
+      label.append(checkbox, makeElement("span", "", text));
+      card.append(label);
+    });
+    container.append(card);
+  });
+
+  const apply = makeElement("button", "button button-primary", "Приложи избраните промени");
+  apply.type = "button";
+  apply.disabled = updatesRequestInProgress;
+  apply.addEventListener("click", applyOrderUpdates);
+  container.append(apply);
+}
+
+async function compareOrderList() {
+  if (updatesRequestInProgress || !isAdmin()) return;
+  els["update-orders-status"].textContent = "Извличане и сравняване на списъка…";
+  els["update-review"].replaceChildren();
+  els["update-review"].classList.add("hidden");
+  parsedOrderUpdates = [];
+  updatesRequestInProgress = true;
+  els["update-orders-button"].disabled = true;
+  try {
+    const result = await postAdminRequest("/api/parse-orders", { text: els["parse-orders-text"].value });
+    if (!Array.isArray(result.orders)) throw new Error("Сървърът върна невалиден списък с поръчки.");
+    parsedOrderUpdates = prepareOrderUpdates(result.orders, cars);
+    renderOrderUpdateReview();
+    els["update-orders-status"].textContent = result.orders.length
+      ? "Проверете съвпаденията и изберете кои различия да приложите."
+      : "Не бяха открити записи в списъка.";
+  } catch (error) {
+    els["update-orders-status"].textContent = error.message || "Списъкът не беше обработен.";
+  } finally {
+    updatesRequestInProgress = false;
+    els["update-orders-button"].disabled = false;
+    renderOrderUpdateReview();
+  }
+}
+
+async function applyOrderUpdates() {
+  if (updatesRequestInProgress || !isAdmin()) return;
+  const selected = [...els["update-review"].querySelectorAll("input[type=checkbox]:checked[data-update-index]")]
+    .map((checkbox) => ({
+      index: Number(checkbox.dataset.updateIndex),
+      field: checkbox.dataset.field,
+    }));
+  if (!selected.length) {
+    els["update-orders-status"].textContent = "Няма избрани промени за прилагане.";
+    return;
+  }
+
+  const changesById = new Map();
+  for (const { index, field } of selected) {
+    const item = parsedOrderUpdates[index];
+    if (!item || item.match !== "matched" || !item.changes.some((change) => change.field === field && !change.blockedReason)) continue;
+    if (!changesById.has(item.current.id)) changesById.set(item.current.id, { expected: item.current, fields: {} });
+    const change = item.changes.find((entry) => entry.field === field);
+    changesById.get(item.current.id).fields[field] = change.to;
+  }
+  if (!changesById.size) {
+    els["update-orders-status"].textContent = "Няма валидни промени за прилагане.";
+    return;
+  }
+
+  updatesRequestInProgress = true;
+  els["update-orders-button"].disabled = true;
+  els["update-orders-status"].textContent = "Записване на промените…";
+  renderOrderUpdateReview();
+  try {
+    await transactCars((current) => {
+      const latestCars = safeCars(current);
+      for (const { expected } of changesById.values()) {
+        const latest = latestCars.find((car) => car.id === expected.id);
+        if (!latest || stableStringify(latest) !== stableStringify(expected)) {
+          throw new Error(`Записът „${expected.name}“ е променен след прегледа. Сравнете списъка отново.`);
+        }
+      }
+      return current.map((car) => {
+        const update = changesById.get(car?.id);
+        return update ? { ...car, ...update.fields } : car;
+      });
+    });
+    els["update-orders-status"].textContent = `Обновени записи: ${changesById.size}.`;
+    showNotice(`Обновени са ${changesById.size} записа.`, "success", 5000);
+    parsedOrderUpdates = [];
+    renderOrderUpdateReview();
+  } catch (error) {
+    els["update-orders-status"].textContent = error.message || "Промените не бяха записани.";
+  } finally {
+    updatesRequestInProgress = false;
+    els["update-orders-button"].disabled = false;
+    renderOrderUpdateReview();
+  }
+}
+
 async function extractOrders() {
   if (ordersRequestInProgress || !isAdmin()) return;
   const text = els["parse-orders-text"].value;
@@ -1037,7 +1197,7 @@ async function extractOrders() {
     const result = await postAdminRequest("/api/parse-orders", { text });
     if (!Array.isArray(result.orders)) throw new Error("Сървърът върна невалиден списък с поръчки.");
     parsedOrders = result.orders;
-    renderOrderReview(result.deliveryTermNotice);
+    renderOrderReview();
     els["parse-orders-status"].textContent = parsedOrders.length
       ? `Извлечени записи: ${parsedOrders.length}. Проверете и редактирайте ги преди добавяне.`
       : "Не бяха открити поръчки.";
@@ -1178,6 +1338,7 @@ function installEvents() {
   });
   els["add-car-button"].addEventListener("click", () => openCarForm());
   els["parse-orders-button"].addEventListener("click", extractOrders);
+  els["update-orders-button"].addEventListener("click", compareOrderList);
   els["import-form"].addEventListener("submit", confirmImport);
   els["car-form"].addEventListener("submit", saveCar);
   document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => closeDialog(document.getElementById(button.dataset.close))));

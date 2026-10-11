@@ -29,8 +29,11 @@ export const STATUSES = ["waiting", "delivered", "switched"];
 
 const MODEL_ALIASES = new Map([
   ["43 kwh comfort", "43 kWh Comfort"],
+  ["43 comfort", "43 kWh Comfort"],
   ["54 kwh comfort", "54 kWh Comfort"],
+  ["54 comfort", "54 kWh Comfort"],
   ["54 kwh premium", "54 kWh Premium"],
+  ["54 premium", "54 kWh Premium"],
   ["comfort", "Comfort"],
   ["комфорт", "Comfort"],
   ["premium", "54 kWh Premium"],
@@ -58,6 +61,12 @@ const COLOR_ALIASES = new Map([
   ["cosmic silver", "cosmic-silver"],
   ["cosmic-silver", "cosmic-silver"],
   ["red", "red"],
+  ["blue", "piccadilly-blue"],
+  ["син", "piccadilly-blue"],
+  ["синя", "piccadilly-blue"],
+  ["green", "stone-green"],
+  ["зелен", "stone-green"],
+  ["зелена", "stone-green"],
   ["червен", "red"],
   ["червена", "red"],
   ["white", "white"],
@@ -154,7 +163,7 @@ export function validateParsedOrders(value, today = todayInSofia()) {
       orderDate,
       deliveryDate,
       status,
-      note: optionalText(entry.note, 300, "бележка", index),
+      note: optionalText(entry.note, 1000, "бележка", index),
       deliveryTerm: optionalText(entry.deliveryTerm, 120, "срок за доставка", index),
     };
   });
@@ -199,7 +208,8 @@ export function validateOrdersForSaving(value, today = todayInSofia()) {
       throw new Error(`Запис ${index + 1}: за статус „Доставена“ въведете реална дата на доставка.`);
     }
 
-    const note = optionalText(entry.note, 300, "бележка", index);
+    const note = optionalText(entry.note, 1000, "бележка", index);
+    const deliveryTerm = optionalText(entry.deliveryTerm, 120, "срок за доставка", index);
     return {
       id: crypto.randomUUID(),
       name,
@@ -210,6 +220,7 @@ export function validateOrdersForSaving(value, today = todayInSofia()) {
       deliveryDate,
       ...(status ? { status } : {}),
       ...(note ? { note } : {}),
+      ...(deliveryTerm ? { deliveryTerm } : {}),
     };
   });
 }

@@ -13,6 +13,8 @@ test("normalizes only supported model and color names", () => {
   assert.equal(normalizeModel("43 kWh Comfort"), "43 kWh Comfort");
   assert.equal(normalizeModel("54 kWh Comfort"), "54 kWh Comfort");
   assert.equal(normalizeModel("54 kWh Premium"), "54 kWh Premium");
+  assert.equal(normalizeModel("54 Comfort"), "54 kWh Comfort");
+  assert.equal(normalizeModel("54 Premium"), "54 kWh Premium");
   assert.equal(normalizeModel("премиум"), "54 kWh Premium");
   assert.equal(normalizeModel("Comfort"), "Comfort");
   assert.equal(normalizeModel("Basic"), null);
@@ -22,7 +24,9 @@ test("normalizes only supported model and color names", () => {
   assert.equal(normalizeDealer("Русе"), null);
   assert.equal(normalizeColor("Stone Green"), "stone-green");
   assert.equal(normalizeColor("червен"), "red");
-  assert.equal(normalizeColor("зелен"), null);
+  assert.equal(normalizeColor("Blue"), "piccadilly-blue");
+  assert.equal(normalizeColor("Green"), "stone-green");
+  assert.equal(normalizeColor("зелен"), "stone-green");
 });
 
 test("keeps unknown facts null and separates delivery terms from delivery dates", () => {
@@ -41,6 +45,7 @@ test("keeps unknown facts null and separates delivery terms from delivery dates"
   assert.equal(order.deliveryDate, null);
   assert.equal(order.deliveryTerm, "210 дни");
   assert.equal(order.dealer, "Варна");
+  assert.equal(order.deliveryTerm, "210 дни");
   assert.equal(order.color, "red");
 });
 
@@ -96,7 +101,7 @@ test("rejects impossible dates, future dates, and delivery before order", () => 
   assert.throws(() => validateParsedOrders([{ ...base, deliveryDate: "2026-06-19" }], "2026-10-08"));
 });
 
-test("saving requires a name and exact order date, creates server IDs, and drops unsupported fields", () => {
+test("saving requires a name and exact order date, creates server IDs, and preserves the delivery term", () => {
   const [order] = validateOrdersForSaving([{
     name: " Иван   Петров ",
     model: "54 kWh Premium",
@@ -113,7 +118,7 @@ test("saving requires a name and exact order date, creates server IDs, and drops
   assert.equal(order.name, "Иван Петров");
   assert.equal(order.dealer, "София");
   assert.equal(order.note, "Батерия 54 kWh");
-  assert.equal("deliveryTerm" in order, false);
+  assert.equal(order.deliveryTerm, "210 дни");
   assert.throws(() => validateOrdersForSaving([{ ...order, orderDate: null }], "2026-10-08"));
   assert.throws(() => validateOrdersForSaving([{ ...order, model: "Premium" }], "2026-10-08"));
   assert.throws(() => validateOrdersForSaving([{ ...order, dealer: "Русе" }], "2026-10-08"));

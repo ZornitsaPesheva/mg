@@ -66,9 +66,12 @@
             <label class="form-field"><span>Коментари за извличане</span><textarea id="parse-orders-text" rows="5" maxlength="12000" placeholder="Поставете един или няколко коментара тук."></textarea></label>
             <div class="order-import-actions">
               <button id="parse-orders-button" class="button button-outline" type="button">Извлечи поръчките</button>
+              <button id="update-orders-button" class="button button-outline" type="button">Сравни и обнови съществуващи</button>
               <span id="parse-orders-status" class="parse-orders-status" role="status" aria-live="polite"></span>
+              <span id="update-orders-status" class="parse-orders-status" role="status" aria-live="polite"></span>
             </div>
             <div id="order-review" class="order-review hidden"></div>
+            <div id="update-review" class="order-review hidden"></div>
           </section>
 
           <div id="notice" class="notice hidden" role="status" aria-live="polite"></div>
@@ -147,8 +150,9 @@
         <label class="form-field"><span>Дата на поръчката</span><input name="orderDate" type="date"><small id="order-date-help">Задължителна за нов запис.</small></label>
         <div id="approximate-preserve" class="approximate-preserve hidden"></div>
         <label class="form-field"><span>Дата на доставка <em>незадължително</em></span><input name="deliveryDate" type="date"><small>Може да бъде добавена или изчистена по-късно.</small></label>
+        <label class="form-field"><span>Очакван срок за доставка <em>незадължително</em></span><input name="deliveryTerm" type="text" maxlength="120"></label>
         <label class="form-field"><span>Статус <em>незадължително</em></span><select name="status"><option value="">Автоматичен (по дата на доставка)</option><option value="waiting">Очаква доставка</option><option value="delivered">Доставена</option><option value="switched">Преминава към друг модел</option></select></label>
-        <label class="form-field"><span>Бележка <em>незадължително</em></span><textarea name="note" rows="2" maxlength="300"></textarea><small>Обещаните срокове се пазят само тук, не като действителна доставка.</small></label>
+        <label class="form-field"><span>Бележка <em>незадължително</em></span><textarea name="note" rows="2" maxlength="1000"></textarea><small>Обещаните срокове се пазят отделно от действителната дата на доставка.</small></label>
         <p id="car-form-error" class="form-error" role="alert"></p>
         <div class="modal-actions"><button class="button button-outline" type="button" data-close="car-dialog">Отказ</button><button class="button button-primary" type="submit">Запази</button></div>
       </form>
